@@ -42,7 +42,7 @@ private:
     std::vector<Individual> new_population;
     std::mutex mtx; // 用于保护共享资源
 
-    std::vector<std::unique_ptr<CompassModelEngine>> engines;
+    std::vector<std::vector<std::unique_ptr<CompassModelEngine>>> engines;
 
     unsigned int thread_num;
 
@@ -57,22 +57,27 @@ public:
     std::vector<energy_t> process_energy;
 
     // 构造函数
-    GA(const std::vector<std::shared_ptr<Network>> &_batchedModels, const std::vector<std::shared_ptr<CoreMapper>> &_coreMappers, std::shared_ptr<NoC> _noc)
+    GA(const std::vector<std::vector<std::shared_ptr<Network>>> &_batchedModels, const std::vector<std::shared_ptr<CoreMapper>> &_coreMappers, std::shared_ptr<NoC> _noc)
     {
-        BATCH_SIZE = _batchedModels.size();
-        LAYER_NUM = _batchedModels[0]->len();
+        BATCH_SIZE = _batchedModels[0].size();
+        LAYER_NUM = _batchedModels[0][0]->len();
         CHIPLET_NUM = _coreMappers.size();
+        population.resize(pop_size);
+        engines.resize(_batchedModels.size());
 
         auto [segmentation, layerToChip] = random_mapping(BATCH_SIZE, LAYER_NUM, CHIPLET_NUM);
-        auto model_engine = std::make_unique<CompassModelEngine>(_batchedModels, _coreMappers, _noc, segmentation, layerToChip);
 
-        population.resize(pop_size);
-        unsigned int n = std::thread::hardware_concurrency();
-        thread_num = std::max(1u, n);
-        for (size_t _ : tqdm(thread_num, "GA: create engines"))
+        for(size_t i:tqdm(_batchedModels,"GA: create engines"))
         {
-            (void)_;
-            engines.emplace_back(std::make_unique<CompassModelEngine>(*model_engine));
+            auto model_engine = std::make_unique<CompassModelEngine>(_batchedModels[i], _coreMappers, _noc, segmentation, layerToChip);
+
+            unsigned int n = std::thread::hardware_concurrency();
+            thread_num = std::max(1u, n);
+            for (size_t _=0;_<thread_num;_++)
+            {
+                (void)_;
+                engines[i].emplace_back(std::make_unique<CompassModelEngine>(*model_engine));
+            }
         }
     }
 
@@ -109,7 +114,7 @@ public:
 
 private:
     // 适应度评估
-    void evaluate_individual(int i, Individual &ind);
+    void evaluate_individual(int parallel_i, Individual &ind);
 
     // 交叉和变异的并行处理
     void crossover_and_mutate_parallel();

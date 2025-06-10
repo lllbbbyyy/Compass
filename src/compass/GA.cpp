@@ -90,13 +90,21 @@ void GA::evaluate_population_parallel(std::vector<Individual> &pop)
     // }
 }
 
-void GA::evaluate_individual(int i, Individual &ind)
+void GA::evaluate_individual(int parallel_i, Individual &ind)
 {
-    engines[i]->setSegmentation(ind.segmentation, ind.layerToChip);
-    auto [latency, energy] = engines[i]->calcLatencyAndEnergy();
-    ind.latency = latency;
-    ind.energy = energy;
-    ind.fitness = 1 / cost_func(latency, energy, 1);
+    cycle_t all_model_latency = 0;
+    energy_t all_model_energy = 0;
+    for(size_t i=0;i<engines.size();++i)
+    {
+        engines[i][parallel_i]->setSegmentation(ind.segmentation, ind.layerToChip);
+        auto [latency, energy] = engines[i][parallel_i]->calcLatencyAndEnergy();
+        all_model_latency += latency;
+        all_model_energy += energy;
+    }
+    
+    ind.latency = all_model_latency / engines.size();
+    ind.energy = all_model_energy / engines.size();
+    ind.fitness = 1 / cost_func(ind.latency, ind.energy, 1);
 }
 
 Individual GA::crossover(const Individual &p1, const Individual &p2)
@@ -408,9 +416,9 @@ void GA::random_run()
 
 std::tuple<cycle_t, energy_t, mc_t> GA::get_best_res()
 {
-    engines[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
-    auto [latency, energy] = engines[0]->calcLatencyAndEnergy();
-    auto mc = engines[0]->calcMonetaryCost();
+    engines[0][0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
+    auto [latency, energy] = engines[0][0]->calcLatencyAndEnergy();
+    auto mc = engines[0][0]->calcMonetaryCost();
     return {latency, energy, mc};
 }
 
@@ -430,9 +438,9 @@ void GA::save_best_solution(const std::string &filename,int micro_batch_size)
 void GA::save_latency_detail(const std::string &filename)
 {
     nlohmann::json j;
-    engines[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
-    engines[0]->calcLatencyAndEnergy();
-    j=engines[0]->get_latency_detail();
+    engines[0][0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
+    engines[0][0]->calcLatencyAndEnergy();
+    j=engines[0][0]->get_latency_detail();
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution latency detail saved to " << filename << "\n";
@@ -441,9 +449,9 @@ void GA::save_latency_detail(const std::string &filename)
 void GA::save_energy_detail(const std::string &filename)
 {
     nlohmann::json j;
-    engines[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
-    engines[0]->calcLatencyAndEnergy();
-    j=engines[0]->get_energy_detail();
+    engines[0][0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
+    engines[0][0]->calcLatencyAndEnergy();
+    j=engines[0][0]->get_energy_detail();
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution energy detail saved to " << filename << "\n";
@@ -452,8 +460,8 @@ void GA::save_energy_detail(const std::string &filename)
 void GA::save_mc_detail(const std::string &filename)
 {
     nlohmann::json j;
-    engines[0]->calcMonetaryCost();
-    j=engines[0]->get_mc_detail();
+    engines[0][0]->calcMonetaryCost();
+    j=engines[0][0]->get_mc_detail();
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution mc detail saved to " << filename << "\n";

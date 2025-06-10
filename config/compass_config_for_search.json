@@ -1,6 +1,7 @@
 {
     "req_generator_input_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_input_lengths.json",
     "req_generator_output_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_output_lengths.json",
+    "req_number":50,
 
     "model_info":{
         "type":"llm",

@@ -1,1 +1,1 @@
-./build/compass ./config/compass_config.json ./scripts/log/input_0.json ./tmp/1.csv
+./build/compass ./config/compass_config_for_search.json ./scripts/log/input_0.json ./tmp/1.csv
