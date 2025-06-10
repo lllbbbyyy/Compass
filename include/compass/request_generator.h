@@ -56,6 +56,7 @@ public:
 
     ReqGenerator(int batch_size);
     batchedReqs_t generateReq(int micro_batch_size);
+    batchedReqs_t generateReq(int micro_batch_size,int num_prefill, int num_decode);
 
 private:
     int now_id;
