@@ -38,7 +38,7 @@ int main()
 
 	ReqGenerator generator(batch_size);
 	vector<shared_ptr<Network>> batched_models;
-	auto batches = generator.generateReq(micro_batch_size);
+	auto batches = generator.generateReq(micro_batch_size,2,batch_size-2);
 	for (int i : tqdm(batch_size / micro_batch_size))
 	{
 		DEBUG("batch", i);

@@ -13,7 +13,7 @@ std::string ReqGenerator::outputLengthsFile="./config/simulated_output_lengths.j
 ReqGenerator::ReqGenerator(int batch_size) 
     : now_id(0),
       batch_size(batch_size),
-      warmup(5000){
+      warmup(4500){
     
     req_cache.resize(batch_size, {0, std::nullopt});
 
@@ -70,46 +70,105 @@ int ReqGenerator::getNextOutputLength() {
 
 batchedReqs_t ReqGenerator::generateReq(int micro_batch_size) {
     assert(batch_size % micro_batch_size == 0);
-    batchedReqs_t result;
 
-    if (res_reqs.empty()) {
-        res_reqs.clear();
-        for (int i = 0; i < batch_size; ++i) {
-            auto& [seq_len, req_opt] = req_cache[i];
-            if (seq_len == 0) {
-                int input_len = getNextInputLength();
-                int output_len = getNextOutputLength();
-                
-                req_opt = Req(now_id, Req::Type::Prefill, input_len, 0);
-                seq_len = output_len - 1;
-                res_reqs.push_back(*req_opt);
-                now_id++;
-            } else {
-                if (req_opt.has_value()) {
-                    Req& req = req_opt.value();
-                    req.type = Req::Type::Decode;
-                    req.lens = 1;
-                    req.his_lens += 1;
-                    seq_len--;
-                    res_reqs.push_back(req);
-                }
-            }
-        }
+    std::vector<Req> prefill_reqs;
+    std::vector<Req> decode_reqs;
 
-        for (int i = 0; i < batch_size; ++i) {
-            if (ThreadSafeRandom::rand_percent() < 0.3) {
-                // int input_len = getNextInputLength();
-                int input_len = 32;
-                int output_len = getNextOutputLength();
-                
-                Req new_req(now_id, Req::Type::Prefill, input_len, 0);
-                req_cache[i] = {output_len - 1, new_req};
-                res_reqs[i] = new_req;
-                now_id++;
+    for (int i = 0; i < batch_size; ++i) {
+        auto& [seq_len, req_opt] = req_cache[i];
+
+        if (seq_len == 0) {
+            int input_len = getNextInputLength();
+            int output_len = getNextOutputLength();
+            Req new_req(now_id, Req::Type::Prefill, input_len, 0);
+            req_cache[i] = {output_len - 1, new_req};
+            prefill_reqs.push_back(new_req);
+            now_id++;
+        } else {
+            if (req_opt.has_value()) {
+                Req& req = req_opt.value();
+                req.type = Req::Type::Decode;
+                req.lens = 1;
+                req.his_lens += 1;
+                seq_len--;
+                decode_reqs.push_back(req);
             }
         }
     }
 
+    // 将 prefill 放在 decode 前面
+    res_reqs.clear();
+    res_reqs.insert(res_reqs.end(), prefill_reqs.begin(), prefill_reqs.end());
+    res_reqs.insert(res_reqs.end(), decode_reqs.begin(), decode_reqs.end());
+
+    // 拆 micro-batch
+    batchedReqs_t result;
+    for (int i = 0; i < batch_size / micro_batch_size; ++i) {
+        auto start = res_reqs.begin() + i * micro_batch_size;
+        auto end = start + micro_batch_size;
+        result.emplace_back(start, end);
+    }
+
+    return result;
+}
+
+batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, int num_decode) {
+    assert(batch_size % micro_batch_size == 0);
+    assert(num_prefill + num_decode == batch_size);
+
+    batchedReqs_t result;
+    res_reqs.clear();
+    std::vector<bool> used(batch_size, false);
+    int prefill_count = 0;
+    int decode_count = 0;
+
+    // Step 1: 收集 prefill 请求（不写入 req_cache）
+    for (int i = 0; i < batch_size && prefill_count < num_prefill; ++i) {
+        int input_len = getNextInputLength();
+        Req new_req(now_id, Req::Type::Prefill, input_len, 0);
+        res_reqs.push_back(new_req);
+        now_id++;
+        prefill_count++;
+        // 不写回 req_cache，避免影响自然分布
+    }
+
+    // Step 2: 从 req_cache 中找合法的 decode 请求
+    for (int i = 0; i < batch_size && decode_count < num_decode; ++i) {
+        auto& [seq_len, req_opt] = req_cache[i];
+        if (used[i] || !req_opt.has_value()) continue;
+        if (seq_len > 0) {
+            Req& req = req_opt.value();
+            req.type = Req::Type::Decode;
+            req.lens = 1;
+            req.his_lens += 1;
+            seq_len--;
+            res_reqs.push_back(req);
+            used[i] = true;
+            decode_count++;
+        }
+    }
+
+    // Step 3: decode fallback — 用合法 prefill 转成 decode
+    for (int i = 0; i < batch_size && decode_count < num_decode; ++i) {
+        auto& [seq_len, req_opt] = req_cache[i];
+        if (used[i] || !req_opt.has_value()) continue;
+        Req& req = req_opt.value();
+        if (req.type == Req::Type::Prefill && req.his_lens == 0 && seq_len > 0) {
+            req.type = Req::Type::Decode;
+            req.lens = 1;
+            req.his_lens += 1;
+            seq_len--;
+            res_reqs.push_back(req);
+            used[i] = true;
+            decode_count++;
+        }
+    }
+
+    // Step 4: 严格验证是否满足需求
+    assert(prefill_count == num_prefill && "Prefill count mismatch!");
+    assert(decode_count == num_decode && "Not enough valid decode requests!");
+
+    // Step 5: 拆分 micro-batches
     for (int i = 0; i < batch_size / micro_batch_size; ++i) {
         auto start = res_reqs.begin() + i * micro_batch_size;
         auto end = start + micro_batch_size;
