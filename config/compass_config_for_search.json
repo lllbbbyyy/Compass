@@ -1,0 +1,28 @@
+{
+    "req_generator_input_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_input_lengths.json",
+    "req_generator_output_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_output_lengths.json",
+
+    "model_info":{
+        "type":"llm",
+        "n_layer":1,
+        "d_model":4096,
+        "n_head":32,
+        "d_head":128
+    },
+    "batch_size":64,
+
+    "dram_num":2,
+
+    "run_mode":"GA",
+
+    "best_solution_save_path":"./tmp/best_solution.json",
+    "search_process_save_path":"./tmp/search_process.json",
+
+    "GA_population_size":250,
+    "GA_generations":30,
+
+    "exec_load_path":"./tmp/best_solution.json",
+    "detail_latency_save_path":"",
+    "detail_energy_save_path":"",
+    "detail_mc_save_path":""
+}

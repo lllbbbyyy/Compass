@@ -1,0 +1,491 @@
+/* This file contains
+ *	Layer:  base class for all network layers
+ *  .*Layer: classes for each layer
+ *
+ *  One can add new type of layers as classes here.
+ */
+
+#ifndef LAYER_H
+#define LAYER_H
+
+#include <cstdint>
+#include <string>
+#include <memory>
+#include <atomic>
+
+#include "util.h"
+
+
+/*
+ * FAST_INIT_LAYER
+ *
+ * With the macros below, one can define layers more conveniently.
+ * Example:
+ *     a = LAYER("conv1", Conv, C=64, K=128, H=32, R=3)
+ * defines a conv layer with a 3*3*64*128 kernel and 32*32*128 ofmap.
+ * TYPE of a layer: Conv/FC/LR/Pooling/Eltwise
+ */
+
+#ifndef NO_FAST_INIT_LAYER
+
+#define WLarg0_(n, ...)
+#define WLarg1_(n, a, ...) n.a;
+#define WLarg2_(n, a, b, ...) n.a; n.b;
+#define WLarg3_(n, a, b, c, ...) n.a; n.b; n.c;
+#define WLarg4_(n, a, b, c, d, ...) n.a; n.b; n.c; n.d;
+#define WLarg5_(n, a, b, c, d, e, ...) n.a; n.b; n.c; n.d; n.e;
+#define WLarg6_(n, a, b, c, d, e, f, ...) n.a; n.b; n.c; n.d; n.e; n.f;
+#define WLarg7_(n, a, b, c, d, e, f, g, ...) n.a; n.b; n.c; n.d; n.e; n.f; n.g;
+#define WLarg8_(n, a, b, c, d, e, f, g, h, ...) n.a; n.b; n.c; n.d; n.e; n.f; n.g; n.h;
+#define WLarg9_(n, a, b, c, d, e, f, g, h, i, ...) n.a; n.b; n.c; n.d; n.e; n.f; n.g; n.h; n.i;
+
+
+#define EVAL_Def_(n, a, b, c, d, e, f, g, h, i, m, ...)\
+	WLarg##m##_(n, a, b, c, d, e, f, g, h, i)
+
+#define WLDef_(n, ...)\
+	EVAL_Def_(n, ##__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+
+#define WL_(TYPE, ...)\
+	([&]{ TYPE::Workload _x_; WLDef_(_x_, ##__VA_ARGS__) return _x_; }())
+
+#define LAYER(NAME, TYPE, ...)\
+	TYPE##Layer(NAME, WL_(TYPE##Layer, ##__VA_ARGS__))
+
+#define NLAYER(NAME, TYPE, ...)\
+	new LAYER(NAME, TYPE, ##__VA_ARGS__)
+
+#endif // #ifndef NO_FAST_INIT_LAYER
+
+
+class InputData{
+private:
+
+public:
+	std::string name;
+	fmap_shape data_shape;
+	int DRAM_id;
+
+	InputData(const std::string& _name, const fmap_shape& _data_shape,int dram_id=-1);
+
+	const fmap_shape& get_shape() const;
+
+	~InputData()=default;
+};
+
+class Layer{
+protected:
+	std::string name;
+
+	utime_t unit_time; // NPT in SET paper.
+
+	// Ifm_shape contains padding.
+	fmap_shape ifm_shape, ofm_shape, wgt_shape;
+
+	bwidth_t bitwidth; // Currently not used. Reserved for future use.
+
+	Layer(const std::string& _name, const fmap_shape& _ifm_shape, const fmap_shape& _ofm_shape, const fmap_shape& _wgt_shape);
+	Layer(const std::string& _name);
+
+public:
+
+		// Previous layers.
+	std::vector<lid_t> ifmPrevs; // previous inputs
+	std::vector<lid_t> wgtPrevs; // for GroupConv, where weight is also fmap.
+	std::vector<lid_t> prevs;    // prevs = ifmPrevs + wgtPrevs
+
+	// Next layers.
+	std::vector<lid_t> nexts;
+
+	// #channels that comes from InputData
+	len_t external_C;
+
+
+	std::vector<InputData> ifm_input_data, wgt_input_data;
+
+	const std::string& get_name() const;
+
+	utime_t get_utime() const;
+	void set_utime(utime_t time);
+
+	// tot_ifmap_shape(): ifmap_shape without padding
+	const fmap_shape& tot_ifmap_shape() const;
+	const fmap_shape& ofmap_shape() const;
+	const fmap_shape& weight_shape() const;
+
+	// Currently not used. Reserved for future use.
+	bwidth_t get_bitwidth() const;
+	void set_bitwidth(bwidth_t width);
+
+	// ifmap_shape with padding (if any)
+	virtual const fmap_shape& real_ifmap_shape() const =0;
+
+	// Size of weight, 0 for no weight.
+	virtual vol_t weight_size() const =0;
+
+	// Returns whether the padded ifmap shape is valid.
+	// If valid, will also set related parameters (e.g. padding in Conv)
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape)=0;
+
+	// num of ops * batch_size
+	virtual access_t get_num_op(len_t batch_size=1) const =0;
+
+	// Calculates the range of ifmap needed to compute the ofmap *ofm_range*
+	// Results are written in-place to *ofm_range*
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const =0;
+
+	/*
+	 * Calculates the range of weights needed to compute the ofmap *ofm_range*
+	 * Results are written in-place to *ofm_range*
+	 *
+	 * Correspondance between weight(B(1), C, K, R, S) and fmap_range(B,C,H,W):
+	 * B = B(1)
+	 * C = K
+	 * H = C
+	 * W = R*S
+	 */
+	virtual void ofm_to_wgt(fmap_range& ofm_range) const =0;
+
+	// Returns whether different ofmap K (and same HW) needs different ifmap.
+	// e.g. false for ConvLayer(all C), true for LRLayer(C=K)
+	virtual bool fmap_channel_rel() const =0;
+
+	//virtual std::unique_ptr<Layer> clone() const = 0;
+    // Layer(const Layer&) = delete;
+    // Layer& operator=(const Layer&) = delete;
+
+    Layer() = default;
+    virtual ~Layer() = default;
+
+};
+
+class ConvLayer: public Layer{
+public:
+	struct Workload{
+		/* Ifmap: C*[R+(H-1)*sH]*[S+(W-1)*sW]
+		 * Filter: C*K*R*S
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+
+		/* Default:
+		 * K=C, R=1, S=R, W=H, sH=1, sW=sH
+		 *
+		 * Must init C, H
+		 */
+		len_t C,K=0,R=1,S=0,H,W=0,sH=1,sW=0;
+		access_t tot_op;
+
+		void init();
+
+		vol_t ifm_size(len_t batch_size) const;
+		vol_t fil_size() const;
+		vol_t ofm_size(len_t batch_size) const;
+
+		void update_op();
+		access_t calc_op(len_t batch_size) const;
+	};
+
+protected:
+	Workload wl;
+	fmap_shape padded_ifm_shape;
+	len_t pad_h, pad_w;
+	vol_t wgt_size;
+
+public:
+	ConvLayer(const std::string& _name, const Workload& _wl);
+
+	const Workload& get_workload() const;
+
+	virtual const fmap_shape& real_ifmap_shape() const override;
+	virtual vol_t weight_size() const override;
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape) override;
+	virtual access_t get_num_op(len_t batch_size=1) const override;
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	virtual void ofm_to_wgt(fmap_range& ofm_range) const override;
+	virtual bool fmap_channel_rel() const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+
+	// ConvLayer(const ConvLayer&) = delete;
+    // ConvLayer& operator=(const ConvLayer&) = delete;
+	virtual ~ConvLayer() override=default;
+};
+
+class GroupConvLayer: public ConvLayer{
+public:
+	struct Workload: ConvLayer::Workload{
+		/* Ifmap: (G*C)*[R+(H-1)*sH]*[S+(W-1)*sW]
+		 * Filter: G*C*K*R*S
+		 * Ofmap: (G*K)*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+
+		/* Default:
+		 * K=C, R=1, S=R, W=H, sH=1, sW=sH
+		 *
+		 * Must init G, C, H
+		 */
+		len_t G;
+
+		// C and K for one group. No need to set.
+		len_t GC, GK;
+
+	public:
+		void init();
+		vol_t fil_size() const;
+	};
+
+protected:
+	Workload wl;
+
+public:
+	GroupConvLayer(const std::string& _name, const Workload& _wl);
+
+	const Workload& get_workload() const;
+
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	virtual void ofm_to_wgt(fmap_range& ofm_range) const override;
+	virtual bool fmap_channel_rel() const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+
+	// GroupConvLayer(const GroupConvLayer&) = delete;
+	// GroupConvLayer& operator=(const GroupConvLayer&) = delete;
+	virtual ~GroupConvLayer() override=default;
+};
+
+class FCLayer: public ConvLayer{
+public:
+	struct Workload{
+		/* Ifmap: C*IH*IW
+		 * Filter: C*K*IH*IW
+		 * Ofmap: K*1*1
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+		len_t C,K,IH=1,IW=0;
+	};
+
+	FCLayer(const std::string& _name, const Workload& wl);
+
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	// FCLayer(const FCLayer&) = delete;
+	// FCLayer& operator=(const FCLayer&) = delete;
+	//virtual std::unique_ptr<Layer> clone() const override;
+};
+
+// TODO: make LRLayer a non pure-virtual class, handling general cases.
+class LRLayer: public Layer{
+public:
+	struct Workload{
+		/* Ifmap: [N+(K-1)*sK]*[R+(H-1)*sH]*[S+(W-1)*sW]
+		 * Filter: 0
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+
+		/* Default:
+		 * W=H, S=R, sK=N, sH=R, sW=sH
+		 * Most of the time we have sK=N, sH=R, sW=sH.
+		 *
+		 * Needs K, H, N, R
+		 */
+		len_t K,H,W=0,N,R,S=0,sK=0,sH=0,sW=0;
+		access_t tot_op;
+
+		void init();
+		void update_op();
+		access_t calc_op(len_t batch_size) const;
+	};
+
+protected:
+	fmap_shape padded_ifm_shape;
+	Workload wl;
+	len_t pad_h, pad_w;
+
+	LRLayer(const std::string& _name, const Workload& _wl);
+
+public:
+	const Workload& get_workload() const;
+
+	virtual const fmap_shape& real_ifmap_shape() const override;
+	virtual vol_t weight_size() const override;
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape) override = 0;
+	virtual access_t get_num_op(len_t batch_size=1) const override;
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override = 0;
+	virtual void ofm_to_wgt(fmap_range& ofm_range) const override;
+	virtual bool fmap_channel_rel() const override;
+	//virtual std::unique_ptr<Layer> clone() const override=0;
+
+	// LRLayer(const LRLayer&) = delete;
+	// LRLayer& operator=(const LRLayer&) = delete;
+	virtual ~LRLayer() override =default;
+};
+
+class PoolingLayer: public LRLayer{
+public:
+	struct Workload{
+		/* Ifmap: K*[R+(H-1)*sH]*[S+(W-1)*sW]
+		 * Filter: 0
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+
+		/* Default:
+		 * W=H, S=R, sH=R, sW=sH
+		 * Most of the time we have sH=R, sW=sH.
+		 *
+		 * Needs K, H, R
+		 */
+		len_t K,H,W=0,R,S=0,sH=0,sW=0;
+	};
+
+	PoolingLayer(const std::string& _name, const Workload& wl);
+
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape) override;
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+
+	// PoolingLayer(const PoolingLayer&) = delete;
+	// PoolingLayer& operator=(const PoolingLayer&) = delete;
+	virtual ~PoolingLayer() override =default;
+};
+
+class EltwiseLayer: public LRLayer{
+public:
+	struct Workload{
+		/* Ifmap: (N*K)*H*W
+		 * Filter: 0
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+		len_t N,K,H,W=0;
+	};
+
+	EltwiseLayer(const std::string& _name, const Workload& wl);
+
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape) override;
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+
+	// EltwiseLayer(const EltwiseLayer&) = delete;
+	// EltwiseLayer& operator=(const EltwiseLayer&) = delete;
+	virtual ~EltwiseLayer() override =default;
+};
+
+class PTPLayer: public LRLayer{
+public:
+	struct Workload{
+		/* Ifmap: K*H*W
+		 * Filter: 0
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+		// Default: W=H
+		// Needs K, H
+		len_t K,H,W=0;
+	};
+
+	PTPLayer(const std::string& _name, const Workload& wl);
+
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape) override;
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+
+	// PTPLayer(const PTPLayer&) = delete;
+	// PTPLayer& operator=(const PTPLayer&) = delete;
+	virtual ~PTPLayer() override =default;
+};
+
+class TransposeLayer: public LRLayer{
+public:
+	enum dim : std::uint8_t{
+		C=0,
+		H=1,
+		W=2,
+		NUM=3
+	};
+
+	struct Workload{
+		/* Ifmap: K*H*W
+		 * Filter: 0
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+
+		// Default: W=H
+		// Needs K, H
+		len_t K,H,W=0;
+		dim order[dim::NUM];
+
+		Workload();
+
+		void init();
+		fmap_range::dim_range& get_origin_dim(fmap_range& range, dim d) const;
+	};
+
+protected:
+	Workload wl;
+
+public:
+	TransposeLayer(const std::string& _name, const Workload& _wl);
+
+	virtual bool set_padded_ifm(const fmap_shape& padded_shape) override;
+	virtual void ofm_to_ifm(fmap_range& ofm_range) const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+
+	// TransposeLayer(const TransposeLayer&) = delete;
+	// TransposeLayer& operator=(const TransposeLayer&) = delete;
+	virtual ~TransposeLayer() override =default;
+};
+
+class UpsampleLayer : public Layer
+{
+public:
+	struct Workload
+	{
+		/* Ifmap: [K/sW]*[H/sH]*[W/sW]
+		 * Filter: 0
+		 * Ofmap: K*H*W
+		 * // B batches in total.
+		 * Now there is no batch here.
+		 */
+		/* Default:
+		 * W=H, sW=sH
+		 */
+		// Needs K, H, sK, sH
+		len_t K, H, W = 0, sK, sH, sW;
+		access_t tot_op;
+		void init();
+		void update_op();
+		access_t calc_op(len_t batch_size) const;
+	};
+
+protected:
+	fmap_shape padded_ifm_shape;
+	Workload wl;
+	len_t pad_h, pad_w;
+public:
+	UpsampleLayer(const std::string &_name, const Workload &_wl);
+	const Workload &get_workload() const;
+	virtual const fmap_shape &real_ifmap_shape() const override;
+	virtual vol_t weight_size() const override;
+	virtual bool set_padded_ifm(const fmap_shape &padded_shape) override;
+	virtual access_t get_num_op(len_t batch_size = 1) const override;
+	virtual void ofm_to_ifm(fmap_range &ofm_range) const override;
+	virtual void ofm_to_wgt(fmap_range &ofm_range) const override;
+
+	virtual bool fmap_channel_rel() const override;
+	//virtual std::unique_ptr<Layer> clone() const override;
+	// UpsampleLayer(const UpsampleLayer &) = delete;
+	// UpsampleLayer &operator=(const UpsampleLayer &) = delete;
+	virtual ~UpsampleLayer() override = default;
+};
+
+#endif // LAYER_H
