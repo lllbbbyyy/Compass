@@ -103,40 +103,44 @@ int main(int argc, char *argv[])
 
 	ReqGenerator::inputLengthsFile = config_j["req_generator_input_length_path"];
 	ReqGenerator::outputLengthsFile = config_j["req_generator_output_length_path"];
+	int req_number= config_j["req_number"];
 	ReqGenerator generator(batch_size);
-	vector<shared_ptr<Network>> batched_models;
-	auto batches = generator.generateReq(micro_batch_size);
-	for (int i : tqdm(batch_size / micro_batch_size))
-	{
-		DEBUG("batch", i);
-		for (auto &req : batches[i])
-		{
-			DEBUG("	", req);
-		}
-	}
-	// exit(0);
+	vector<vector<shared_ptr<Network>>> batched_models(req_number);
+
 	auto model_info = config_j["model_info"];
 	string model_type = model_info["type"];
-	std::shared_ptr<Network> n;
-	for (int i : tqdm(batch_size / micro_batch_size))
+	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{
-		// auto n=create_GPT3(batches[i],32,4096,32,128);
-		
-		// auto n =gen_convs(36);
-		// auto n=create_GPT3(batches[i],1,256,8,32);
-		if(model_type=="llm"){
-			n = create_llm(model_info, batches[i]);
-		}
-		else{
-			assert(0);
-		}
+		auto batches = generator.generateReq(micro_batch_size);
+		std::shared_ptr<Network> n;
+		DEBUG("model",j);
+		for (int i=0;i<batch_size / micro_batch_size;i++)
+		{
+			DEBUG("batch", i);
+			for (auto &req : batches[i])
+			{
+				DEBUG("	", req);
+			}
+			// auto n=create_GPT3(batches[i],32,4096,32,128);
+			
+			// auto n =gen_convs(36);
+			// auto n=create_GPT3(batches[i],1,256,8,32);
+			if(model_type=="llm"){
+				n = create_llm(model_info, batches[i]);
+			}
+			else{
+				assert(0);
+			}
 
-		batched_models.emplace_back(n);
+			batched_models[j].emplace_back(n);
+		}
 	}
-	size_t layer_lens = batched_models[0]->len();
+
+
+	size_t layer_lens = batched_models[0][0]->len();
 	for (size_t i = 0; i < layer_lens; i++)
 	{
-		DEBUG("layer", i, batched_models[0]->getNode(i).name());
+		DEBUG("layer", i, batched_models[0][0]->getNode(i).name());
 	}
 	DEBUG("models created", layer_lens);
 
@@ -202,7 +206,7 @@ int main(int argc, char *argv[])
 		execFile >> exec_j;
 		std::vector<int> segmentation=exec_j["segmentation"];
 		std::vector<std::vector<int>> layerToChip=exec_j["layer_to_chip"];
-		CompassModelEngine model_engine(batched_models, chips, noc, segmentation, layerToChip);
+		CompassModelEngine model_engine(batched_models[0], chips, noc, segmentation, layerToChip);
 		auto [l,e]=model_engine.calcLatencyAndEnergy();
 		auto m=model_engine.calcMonetaryCost();
 		latency=l;
