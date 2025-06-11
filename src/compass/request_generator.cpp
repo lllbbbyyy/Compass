@@ -1,6 +1,7 @@
 // req_generator.cpp
 #include "compass/request_generator.h"
 #include "compass/utils_compass.h"
+#include "debug.h"
 
 using json = nlohmann::json;
 
@@ -146,6 +147,13 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
             used[i] = true;
             decode_count++;
         }
+        if (seq_len == 0) {
+            int input_len = getNextInputLength();
+            int output_len = getNextOutputLength();
+            Req new_req(now_id, Req::Type::Prefill, input_len, 0);
+            req_cache[i] = {output_len - 1, new_req};
+            now_id++;
+        }
     }
 
     // Step 3: decode fallback — 用合法 prefill 转成 decode
@@ -162,10 +170,18 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
             used[i] = true;
             decode_count++;
         }
+        if (seq_len == 0) {
+            int input_len = getNextInputLength();
+            int output_len = getNextOutputLength();
+            Req new_req(now_id, Req::Type::Prefill, input_len, 0);
+            req_cache[i] = {output_len - 1, new_req};
+            now_id++;
+        }
     }
 
     // Step 4: 严格验证是否满足需求
     assert(prefill_count == num_prefill && "Prefill count mismatch!");
+    DEBUG(decode_count, num_decode);
     assert(decode_count == num_decode && "Not enough valid decode requests!");
 
     // Step 5: 拆分 micro-batches

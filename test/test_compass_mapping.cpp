@@ -98,7 +98,6 @@ int main(int argc, char *argv[])
 	bw_t dram_bw = j["dram_bw"];
 	int dram_num = config_j["dram_num"];
 	auto noc = createNoC(chip_x, chip_y, nop_bw, dram_bw, dram_num);
-	auto noc2 = createNoC(chip_x, chip_y, nop_bw, dram_bw, dram_num);
 	DEBUG("noc created");
 
 	ReqGenerator::inputLengthsFile = config_j["req_generator_input_length_path"];
@@ -107,11 +106,24 @@ int main(int argc, char *argv[])
 	ReqGenerator generator(batch_size);
 	vector<vector<shared_ptr<Network>>> batched_models(req_number);
 
+	string req_gen_mode = config_j["req_gen_mode"];
+	int num_prefill = config_j["req_prefill_number"];
+	int num_decode = config_j["req_decode_number"];
+
 	auto model_info = config_j["model_info"];
 	string model_type = model_info["type"];
 	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{
-		auto batches = generator.generateReq(micro_batch_size);
+		batchedReqs_t batches;
+		if(req_gen_mode=="normal"){
+			batches = generator.generateReq(micro_batch_size);
+		}
+		else if(req_gen_mode=="fixed"){
+			batches = generator.generateReq(micro_batch_size, num_prefill, num_decode);
+		}
+		else{
+			assert(0);
+		}
 		std::shared_ptr<Network> n;
 		DEBUG("model",j);
 		for (int i=0;i<batch_size / micro_batch_size;i++)

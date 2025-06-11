@@ -13,3 +13,5 @@ for "exec", should be orginzed as:
 
 
 "model_info": a dict, must contatin "type", and other params
+
+"req_type":"normal" or "fixed"

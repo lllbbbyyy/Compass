@@ -14,10 +14,6 @@ std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers
 	auto n=std::make_shared<Network>();
 	assert(d_model==n_heads*d_head);
 	len_t seq_lens_sum = 0;
-	for(auto& req : reqs){
-		DEBUG("req", req);
-		seq_lens_sum += req.lens;
-	}
 
 	// Input layer for the new token
 	InputData input("input", fmap_shape(d_model, seq_lens_sum, 1));
