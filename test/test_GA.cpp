@@ -88,7 +88,7 @@ int main()
 	cout << "mc detail:" << endl;
 	cout << modelEngine.mcCost << endl;
 
-	auto ga_engine = GA(batched_models, chips, noc);
+	auto ga_engine = GA({batched_models}, chips, noc);
 	ga_engine.run();
 	ga_engine.save_latency_detail("tmp/detail_latency.json");
 	ga_engine.save_progress("tmp/progress.csv");

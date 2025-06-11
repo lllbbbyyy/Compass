@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <future>
 
 static std::pair<std::vector<int>,
                  std::vector<std::vector<int>>>
@@ -416,11 +417,42 @@ void GA::random_run()
 
 std::tuple<cycle_t, energy_t, mc_t> GA::get_best_res()
 {
-    engines[0][0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
-    auto [latency, energy] = engines[0][0]->calcLatencyAndEnergy();
+    
+
+    size_t total = engines.size();
+    size_t index = 0;
+
+    cycle_t total_latency = 0;
+    energy_t total_energy = 0;
+
+    while (index < total)
+    {
+        std::vector<std::future<std::tuple<cycle_t, energy_t>>> futures;
+
+        size_t batch_size = std::min(thread_num, static_cast<unsigned int>(total - index));
+        for (size_t i = 0; i < batch_size; ++i)
+        {
+            auto engine= engines[i][0].get();
+            futures.push_back(std::async(std::launch::async, [engine,segmentation = best_solution.segmentation, layerMap = best_solution.layerToChip]() {
+                    engine->setSegmentation(segmentation, layerMap);
+                    auto [latency, energy] = engine->calcLatencyAndEnergy();
+                    return std::make_tuple(latency, energy);
+                }));
+            index++;
+        }
+
+        for (auto &f : futures)
+        {
+            auto [latency, energy] = f.get();
+            total_latency += latency;
+            total_energy += energy;
+        }
+    }
     auto mc = engines[0][0]->calcMonetaryCost();
-    return {latency, energy, mc};
+    return {total_latency/engines.size(), total_energy/engines.size(), mc};
 }
+
+
 
 void GA::save_best_solution(const std::string &filename,int micro_batch_size)
 {

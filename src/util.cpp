@@ -1,6 +1,7 @@
 #include "util.h"
 
 #include <cassert>
+#include <debug.h>
 
 
 // Used for better io of int8 and uint8

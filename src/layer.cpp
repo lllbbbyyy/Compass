@@ -1,6 +1,7 @@
 #include "layer.h"
 
 #include <cassert>
+#include <debug.h>
 
 
 Layer::Layer(const std::string& _name,
