@@ -9,11 +9,15 @@
 #include <string>
 #include <memory>
 
-std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers,len_t d_model,len_t n_heads,len_t d_head)
+std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers,len_t d_model,len_t n_heads,len_t d_head,len_t tiling_size)
 {
 	auto n=std::make_shared<Network>();
 	assert(d_model==n_heads*d_head);
 	len_t seq_lens_sum = 0;
+	for(auto& req : reqs){
+		seq_lens_sum += req.lens;
+	}
+
 	// Input layer for the new token
 	InputData input("input", fmap_shape(d_model, seq_lens_sum, 1));
 	InputData pos_encoding("pos_encoding", fmap_shape(d_model, seq_lens_sum, 1));
@@ -61,7 +65,6 @@ std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers
 			}
 
 		}
-		const len_t tiling_size=128;
 		
 		// lid_t attn_output = n->add(NLAYER(layer_name + "_out_proj", Conv, C=d_model, H=seq_lens_sum, W=1), QKVs);
 		Network::layer_set attn_output;

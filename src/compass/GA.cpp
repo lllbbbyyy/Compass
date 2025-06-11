@@ -422,7 +422,7 @@ std::tuple<cycle_t, energy_t, mc_t> GA::get_best_res()
     size_t total = engines.size();
     size_t index = 0;
 
-    cycle_t total_latency = 0;
+   double total_latency = 0;
     energy_t total_energy = 0;
 
     while (index < total)

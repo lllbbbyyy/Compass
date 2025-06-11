@@ -123,11 +123,14 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
     int prefill_count = 0;
     int decode_count = 0;
 
+    std::vector<Req> prefill_reqs;
+    std::vector<Req> decode_reqs;
+
     // Step 1: 收集 prefill 请求（不写入 req_cache）
     for (int i = 0; i < batch_size && prefill_count < num_prefill; ++i) {
         int input_len = getNextInputLength();
         Req new_req(now_id, Req::Type::Prefill, input_len, 0);
-        res_reqs.push_back(new_req);
+        prefill_reqs.push_back(new_req);
         now_id++;
         prefill_count++;
         // 不写回 req_cache，避免影响自然分布
@@ -143,7 +146,7 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
             req.lens = 1;
             req.his_lens += 1;
             seq_len--;
-            res_reqs.push_back(req);
+            decode_reqs.push_back(req);
             used[i] = true;
             decode_count++;
         }
@@ -166,7 +169,7 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
             req.lens = 1;
             req.his_lens += 1;
             seq_len--;
-            res_reqs.push_back(req);
+            decode_reqs.push_back(req);
             used[i] = true;
             decode_count++;
         }
@@ -181,8 +184,18 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
 
     // Step 4: 严格验证是否满足需求
     assert(prefill_count == num_prefill && "Prefill count mismatch!");
-    DEBUG(decode_count, num_decode);
     assert(decode_count == num_decode && "Not enough valid decode requests!");
+
+    auto sort_by_lens_desc = [](const Req& a, const Req& b) {
+        if (a.lens != b.lens)
+            return a.lens > b.lens;           // lens 大的在前
+        return a.his_lens > b.his_lens;       // lens 相同则 his_lens 大的在前
+    };
+    std::sort(prefill_reqs.begin(), prefill_reqs.end(), sort_by_lens_desc);
+    std::sort(decode_reqs.begin(), decode_reqs.end(), sort_by_lens_desc);
+
+    res_reqs.insert(res_reqs.end(), prefill_reqs.begin(), prefill_reqs.end());
+    res_reqs.insert(res_reqs.end(), decode_reqs.begin(), decode_reqs.end());
 
     // Step 5: 拆分 micro-batches
     for (int i = 0; i < batch_size / micro_batch_size; ++i) {

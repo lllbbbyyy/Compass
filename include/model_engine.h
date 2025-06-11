@@ -98,7 +98,15 @@ public:
     virtual mc_t calcMonetaryCost() override;
     virtual std::pair<cycle_t,energy_t> calcLatencyAndEnergy() override;
 
-    CompassModelEngine(const std::vector<std::shared_ptr<Network>>& _batchedModels, const std::vector<std::shared_ptr<CoreMapper>>& _coreMappers, std::shared_ptr<NoC> _noc,const std::vector<int>& _segmentation, const std::vector<cidx_t>& _layerToChip) : noc(_noc),batchedModels(_batchedModels),coreMappers(_coreMappers){
+    CompassModelEngine(const std::vector<std::shared_ptr<Network>>& _batchedModels, const std::vector<std::shared_ptr<CoreMapper>>& _coreMappers, std::shared_ptr<NoC> _noc,const std::vector<int>& _segmentation, const std::vector<cidx_t>& _layerToChip) : coreMappers(_coreMappers){
+
+        noc = std::make_shared<NoC>(*_noc);
+
+        batchedModels.reserve(_batchedModels.size());
+        for (const auto& ptr : _batchedModels) {
+            batchedModels.push_back(std::make_shared<Network>(*ptr));  
+        }
+
         coreNum = _coreMappers.size();
         batchDim = _batchedModels.size();
         assert(noc->xlen*noc->ylen==coreNum);
@@ -109,7 +117,15 @@ public:
         setSegmentation(_segmentation,layerToChip);
     };
 
-    CompassModelEngine(const std::vector<std::shared_ptr<Network>>& _batchedModels, const std::vector<std::shared_ptr<CoreMapper>>& _coreMappers, std::shared_ptr<NoC> _noc,const std::vector<int>& _segmentation, const std::vector<std::vector<cidx_t>>& _layerToChip) : noc(_noc),batchedModels(_batchedModels),coreMappers(_coreMappers){
+    CompassModelEngine(const std::vector<std::shared_ptr<Network>>& _batchedModels, const std::vector<std::shared_ptr<CoreMapper>>& _coreMappers, std::shared_ptr<NoC> _noc,const std::vector<int>& _segmentation, const std::vector<std::vector<cidx_t>>& _layerToChip) : coreMappers(_coreMappers){
+
+        noc = std::make_shared<NoC>(*_noc);
+
+        batchedModels.reserve(_batchedModels.size());
+        for (const auto& ptr : _batchedModels) {
+            batchedModels.push_back(std::make_shared<Network>(*ptr));  
+        }
+
         coreNum = _coreMappers.size();
         batchDim = _batchedModels.size();
         assert(noc->xlen*noc->ylen==coreNum);

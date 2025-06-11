@@ -1,5 +1,6 @@
 #include <iostream>
 #include <memory>
+#include <future>
 #include <iomanip>
 #include "layer_engine.h"
 #include "core.h"
@@ -23,7 +24,8 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	len_t d_model = j["d_model"];
 	len_t n_head = j["n_head"];
 	len_t d_head = j["d_head"];
-	return create_GPT3(reqs, n_layers, d_model, n_head, d_head);
+	len_t tiling_size= j["tiling_size"];
+	return create_GPT3(reqs, n_layers, d_model, n_head, d_head,tiling_size);
 }
 
 int main(int argc, char *argv[])
@@ -49,6 +51,9 @@ int main(int argc, char *argv[])
 
 	json config_j;
 	configFile >> config_j;
+
+	int seed=config_j["seed"];
+	ThreadSafeRandom::set_seed(seed);
 
 	// 2. 打开文件
 	std::ifstream inFile(input_filename);
@@ -218,14 +223,47 @@ int main(int argc, char *argv[])
 		execFile >> exec_j;
 		std::vector<int> segmentation=exec_j["segmentation"];
 		std::vector<std::vector<int>> layerToChip=exec_j["layer_to_chip"];
-		CompassModelEngine model_engine(batched_models[0], chips, noc, segmentation, layerToChip);
-		auto [l,e]=model_engine.calcLatencyAndEnergy();
-		auto m=model_engine.calcMonetaryCost();
-		latency=l;
-		energy=e;
-		mc=m;
-		DEBUG("exec res",latency, energy, mc);
 
+		size_t total = batched_models.size();
+		size_t index = 0;
+
+		double total_latency = 0;
+		energy_t total_energy = 0;
+		vector<cycle_t> latencys;
+		vector<energy_t> energys;
+		auto thread_num=std::thread::hardware_concurrency();
+		while (index < total)
+		{
+			std::vector<std::future<std::tuple<cycle_t, energy_t>>> futures;
+
+			size_t parall_size = std::min(thread_num, static_cast<unsigned int>(total - index));
+			for (size_t i = 0; i < parall_size; ++i)
+			{
+				futures.push_back(std::async(std::launch::async, [batched_models,chips, noc, segmentation, layerToChip,index]() {
+						CompassModelEngine model_engine(batched_models[index], chips, noc, segmentation, layerToChip);
+						auto [l,e]=model_engine.calcLatencyAndEnergy();
+						return std::make_tuple(l,e);
+					}));
+				index++;
+			}
+
+			for (auto &f : futures)
+			{
+				auto [latency, energy] = f.get();
+				total_latency += latency;
+				total_energy += energy;
+				latencys.push_back(latency);
+				energys.push_back(energy);
+			}
+		}
+
+		CompassModelEngine model_engine(batched_models[0], chips, noc, segmentation, layerToChip);
+		auto m=model_engine.calcMonetaryCost();
+		latency=total_latency/total;
+		energy=total_energy/total;
+		mc=m;
+		DEBUG("exec avg res",latency, energy, mc);
+		model_engine.calcLatencyAndEnergy(); //for detail
 		if(!detail_latency_file.empty()){
 			auto j=model_engine.get_latency_detail();
 			std::ofstream o(detail_latency_file);
@@ -244,19 +282,30 @@ int main(int argc, char *argv[])
 			o << std::setw(4) << j << std::endl;
 			std::cout << "Best solution mc detail saved to " << detail_mc_file << "\n";
 		}
+		rapidcsv::Document doc;
+		doc.SetColumnName(0, "latency");
+		doc.SetColumnName(1, "energy");
+		doc.SetColumnName(2, "mc");
+		doc.SetColumn<cycle_t>("latency", latencys);
+		doc.SetColumn<energy_t>("energy", energys);
+		doc.SetColumn<mc_t>("mc", vector<mc_t>{mc});
+
+		doc.Save(output_filename);
 	}
 	else{
 		assert(0);
 	}
 
-	rapidcsv::Document doc;
-	doc.SetColumnName(0, "latency");
-	doc.SetColumnName(1, "energy");
-	doc.SetColumnName(2, "mc");
-	doc.SetColumn<cycle_t>("latency", vector<cycle_t>{latency});
-	doc.SetColumn<energy_t>("energy", vector<energy_t>{energy});
-	doc.SetColumn<mc_t>("mc", vector<mc_t>{mc});
+	if(run_mode!="exec"){
+		rapidcsv::Document doc;
+		doc.SetColumnName(0, "latency");
+		doc.SetColumnName(1, "energy");
+		doc.SetColumnName(2, "mc");
+		doc.SetColumn<cycle_t>("latency", vector<cycle_t>{latency});
+		doc.SetColumn<energy_t>("energy", vector<energy_t>{energy});
+		doc.SetColumn<mc_t>("mc", vector<mc_t>{mc});
 
-	doc.Save(output_filename);
+		doc.Save(output_filename);
+	}
 	return 0;
 }

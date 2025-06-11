@@ -62,6 +62,20 @@ int main()
 	}
 	DEBUG("models created", layer_lens);
 
+	///
+	vector<shared_ptr<Network>> batched_models2;
+	auto batches2 = generator.generateReq(micro_batch_size);
+	for (int i : tqdm(batch_size / micro_batch_size))
+	{
+		// auto n=create_GPT3(batches[i],32,4096,32,128);
+		auto n = create_GPT3(batches[i], 1, 4096, 32, 128);
+		// auto n =gen_convs(36);
+		// auto n=create_GPT3(batches[i],1,256,8,32);
+		batched_models2.emplace_back(n);
+	}
+	///
+
+
 	vector<int> segmentation;
 	vector<cidx_t> layerToChip;
 	for (size_t i = 0; i < layer_lens; i++)
@@ -88,8 +102,11 @@ int main()
 	cout << "mc detail:" << endl;
 	cout << modelEngine.mcCost << endl;
 
-	auto ga_engine = GA({batched_models}, chips, noc);
+	auto ga_engine = GA({batched_models,batched_models2}, chips, noc);
 	ga_engine.run();
+	std::cout<<"saved best latency: "<<ga_engine.best_solution.latency<<" energy: "<<ga_engine.best_solution.energy<<endl;
+	auto [l_,e_,mc_]=ga_engine.get_best_res();
+	std::cout<<"get best res latency: "<<l_<<" energy: "<<e_<<" mc: "<<mc_<<endl;
 	ga_engine.save_latency_detail("tmp/detail_latency.json");
 	ga_engine.save_progress("tmp/progress.csv");
 

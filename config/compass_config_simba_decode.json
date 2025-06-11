@@ -5,8 +5,8 @@
     "req_generator_output_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_output_lengths.json",
     "req_number":50,
     "req_gen_mode":"fixed",
-    "req_prefill_number":2,
-    "req_decode_number":62,
+    "req_prefill_number":0,
+    "req_decode_number":64,
 
     "model_info":{
         "type":"llm",
@@ -14,22 +14,22 @@
         "d_model":4096,
         "n_head":32,
         "d_head":128,
-        "tiling_size":4096
+        "tiling_size":512
     },
     "batch_size":64,
 
-    "dram_num":2,
+    "dram_num":4,
 
     "run_mode":"GA",
 
-    "best_solution_save_path":"./tmp/best_solution.json",
-    "search_process_save_path":"./tmp/search_process.json",
+    "best_solution_save_path":"./res_out/simba_decode/simba_best_solution.json",
+    "search_process_save_path":"./res_out/simba_decode/simba_search_process.csv",
 
-    "GA_population_size":250,
-    "GA_generations":30,
+    "GA_population_size":50,
+    "GA_generations":200,
 
     "exec_load_path":"./tmp/best_solution.json",
-    "detail_latency_save_path":"./tmp/detail_latency.json",
-    "detail_energy_save_path":"./tmp/detail_energy.json",
-    "detail_mc_save_path":"./tmp/detail_mc.json"
+    "detail_latency_save_path":"./res_out/simba_decode/simba_latency_detail.json",
+    "detail_energy_save_path":"./res_out/simba_decode/simba_energy_detail.json",
+    "detail_mc_save_path":"./res_out/simba_decode/simba_mc_detail.json"
 }
