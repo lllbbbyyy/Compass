@@ -3,10 +3,10 @@
     
     "req_generator_input_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_input_lengths.json",
     "req_generator_output_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_output_lengths.json",
-    "req_number":50,
+    "req_number":1,
     "req_gen_mode":"fixed",
     "req_prefill_number":0,
-    "req_decode_number":64,
+    "req_decode_number":128,
 
     "model_info":{
         "type":"llm",
@@ -14,9 +14,9 @@
         "d_model":4096,
         "n_head":32,
         "d_head":128,
-        "tiling_size":512
+        "tiling_size":4096
     },
-    "batch_size":64,
+    "batch_size":128,
 
     "dram_num":4,
 

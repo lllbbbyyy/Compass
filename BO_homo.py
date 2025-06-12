@@ -27,39 +27,26 @@ def cost_func(latency, energy, mc):
 def build_search_space():
     chiplet_configs = []
     space = {
-        "config_index": hp.choice("config_index", list(range(len(chiplet_count_options)))),
+        "chiplet_count_options": hp.choice("chiplet_count_options", list(range(len(chiplet_count_options)))),
+        "chiplet_type": hp.choice("chiplet_type", list(range(len(chiplet_type_list)))),
         "nop_bw": hp.choice("nop_bw", list(range(len(nop_bw_options)))),
         "dram_bw": hp.choice("dram_bw", list(range(len(dram_bw_options)))),
-        "micro_batch": hp.choice("micro_batch", list(range(len(micro_batch_options))))
+        "micro_batch": hp.choice("micro_batch", list(range(len(micro_batch_options)))),
+        "buffer": hp.choice("buffer", list(range(len(buffer_size_list)))),
+        "compute": hp.choice("compute", list(range(len(compute_unit_list)))),
     }
 
-    for count in chiplet_count_options:
-        chiplets = []
-        for i in range(count):
-            suffix = f"_n{count}_{i}"
-            space[f"type{suffix}"] = hp.choice(f"type{suffix}", list(range(len(chiplet_type_list))))
-            space[f"buffer{suffix}"] = hp.choice(f"buffer{suffix}", list(range(len(buffer_size_list))))
-            space[f"compute{suffix}"] = hp.choice(f"compute{suffix}", list(range(len(compute_unit_list))))
-            chiplets.append({
-                "type": f"type{suffix}",
-                "buffer": f"buffer{suffix}",
-                "compute": f"compute{suffix}"
-            })
-        chiplet_configs.append({
-            "num_chiplets": count,
-            "chiplets": chiplets
-        })
-    return space, chiplet_configs
+    return space
 
 first_flag=True
 
 # 构建目标函数（闭包形式传入配置）
 def create_objective(chiplet_configs):
     def objective(params):
-        config_index = params["config_index"]
-        config = chiplet_configs[config_index]
-        chiplets = config["chiplets"]
-        num_chiplets = config["num_chiplets"]
+        num_chiplets = chiplet_count_options[params["chiplet_count_options"]]
+        chiplet_type = chiplet_type_list[params["chiplet_type"]]
+        buffer=buffer_size_list[params["buffer"]]
+        compute=compute_unit_list[params["compute"]]
 
         # 构造 JSON 数据结构
         config_json = {
@@ -71,18 +58,10 @@ def create_objective(chiplet_configs):
         }
 
         for i in range(num_chiplets):
-            chiplet = chiplets[i]
-            type_idx = params.get(chiplet["type"])
-            buffer_idx = params.get(chiplet["buffer"])
-            compute_idx = params.get(chiplet["compute"])
-
-            if type_idx is None or buffer_idx is None or compute_idx is None:
-                continue
-
             config_json["chiplets"].append({
-                "type": chiplet_type_list[type_idx],
-                "buffer_size": buffer_size_list[buffer_idx],
-                "compute_units": compute_unit_list[compute_idx]
+                "type": chiplet_type,
+                "buffer_size": buffer,
+                "compute_units": compute
             })
 
         # 保存 JSON 到临时文件
@@ -92,7 +71,7 @@ def create_objective(chiplet_configs):
         compass_out_path = f"./tmp/log/out/compass_{log_id}.out"
         run_cmd= f"./build/compass"
         compass_config_path = "./config/compass_config_simba_decode.json"
-        res_csv_path = "./tmp/hetero_results_log.csv"
+        res_csv_path = "./tmp/homo_decode_results_log.csv"
         log_id+=1
 
         try:
@@ -143,36 +122,21 @@ def create_objective(chiplet_configs):
 
 # 运行优化流程
 def main():
-    space, chiplet_configs = build_search_space()
-    objective = create_objective(chiplet_configs)
+    space = build_search_space()
+    objective = create_objective(None)
 
     best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=100)
 
-    config_index = best["config_index"]
-    config = chiplet_configs[config_index]
-    num_chiplets = config["num_chiplets"]
-
     print("\n=== 最优配置（解码后） ===")
-    print(f"芯粒数量: {num_chiplets}")
+    print(f"芯粒数量: {chiplet_count_options[best['chiplet_count_options']]}")
     print(f"NoP 带宽: {nop_bw_options[best['nop_bw']]} bits")
     print(f"DRAM 带宽: {dram_bw_options[best['dram_bw']]} GB/s")
     print(f"Micro-Batch Size: {micro_batch_options[best['micro_batch']]}")
 
     print(f"\n芯粒配置:")
-    for i in range(num_chiplets):
-        chiplet = config["chiplets"][i]
-        type_idx = best.get(chiplet["type"])
-        buffer_idx = best.get(chiplet["buffer"])
-        compute_idx = best.get(chiplet["compute"])
-
-        if type_idx is None or buffer_idx is None or compute_idx is None:
-            continue
-
-        type_str = chiplet_type_list[type_idx]
-        buffer_val = buffer_size_list[buffer_idx]
-        compute_val = compute_unit_list[compute_idx]
-
-        print(f"  Chiplet {i}: 类型={type_str}, 缓冲区={buffer_val}KB, 计算单元={compute_val}")
+    print(f"芯粒类型: {chiplet_type_list[best['chiplet_type']]}")
+    print(f"缓存大小: {buffer_size_list[best['buffer']]} KB")
+    print(f"计算单元: {compute_unit_list[best['compute']]}")
 
 if __name__ == "__main__":
     main()

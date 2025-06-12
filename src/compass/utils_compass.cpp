@@ -153,6 +153,7 @@ createNoC(mlen_t xlen, mlen_t ylen,
 
     static constexpr double hop_cost     = 2 * 8;
     static constexpr double DRAM_acc_cost = 10.5 * 8;
+    dram_num=std::min(dram_num,ylen*2);
 
     std::vector<bw_t> dram_bws(dram_num, dram_bw_each);
     std::vector<pos_t> dram_router_list;

@@ -1,0 +1,1 @@
+./build/compass ./config/compass_config_exec.json ./config/simba_config.json ./res_out/exec.csv
