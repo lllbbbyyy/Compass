@@ -18,9 +18,9 @@ log_id=0
 
 mc_limit=49.14685
 def cost_func(latency, energy, mc):
-    if mc> mc_limit:
-        return float("inf")
-    return latency*energy
+    # if mc> mc_limit:
+    #     return float("inf")
+    # return latency*energy
     return latency*energy*mc
 
 # 构建搜索空间 + 配置记录（用于解码）
@@ -152,6 +152,15 @@ def main():
     config = chiplet_configs[config_index]
     num_chiplets = config["num_chiplets"]
 
+    # 构造 JSON 数据结构
+    config_json = {
+        "num_chiplets": num_chiplets,
+        "nop_bw": nop_bw_options[best["nop_bw"]],
+        "dram_bw": dram_bw_options[best["dram_bw"]],
+        "micro_batch": micro_batch_options[best["micro_batch"]],
+        "chiplets": []
+    }
+
     print("\n=== 最优配置（解码后） ===")
     print(f"芯粒数量: {num_chiplets}")
     print(f"NoP 带宽: {nop_bw_options[best['nop_bw']]} bits")
@@ -173,6 +182,14 @@ def main():
         compute_val = compute_unit_list[compute_idx]
 
         print(f"  Chiplet {i}: 类型={type_str}, 缓冲区={buffer_val}KB, 计算单元={compute_val}")
+
+        config_json["chiplets"].append({
+            "type": type_str,
+            "buffer_size": buffer_val,
+            "compute_units": compute_val
+        })
+    with open("./tmp/bo_hetero_best_hardware.json", "w") as f:
+        json.dump(config_json, f, indent=2)
 
 if __name__ == "__main__":
     main()

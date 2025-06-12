@@ -127,8 +127,10 @@ def main():
 
     best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=100)
 
+    num_chiplets=chiplet_count_options[best['chiplet_count_options']]
+
     print("\n=== 最优配置（解码后） ===")
-    print(f"芯粒数量: {chiplet_count_options[best['chiplet_count_options']]}")
+    print(f"芯粒数量: {num_chiplets}")
     print(f"NoP 带宽: {nop_bw_options[best['nop_bw']]} bits")
     print(f"DRAM 带宽: {dram_bw_options[best['dram_bw']]} GB/s")
     print(f"Micro-Batch Size: {micro_batch_options[best['micro_batch']]}")
@@ -137,6 +139,23 @@ def main():
     print(f"芯粒类型: {chiplet_type_list[best['chiplet_type']]}")
     print(f"缓存大小: {buffer_size_list[best['buffer']]} KB")
     print(f"计算单元: {compute_unit_list[best['compute']]}")
+
+    # 构造 JSON 数据结构
+    config_json = {
+        "num_chiplets": num_chiplets,
+        "nop_bw": nop_bw_options[best['nop_bw']],
+        "dram_bw": dram_bw_options[best['dram_bw']],
+        "micro_batch": micro_batch_options[best['micro_batch']],
+        "chiplets": []
+    }
+    for i in range(num_chiplets):
+        config_json["chiplets"].append({
+            "type": chiplet_type_list[best['chiplet_type']],
+            "buffer_size": buffer_size_list[best['buffer']],
+            "compute_units": compute_unit_list[best['compute']]
+        })
+    with open("./tmp/bo_homo_best_hardware.json", "w") as f:
+        json.dump(config_json, f, indent=2)
 
 if __name__ == "__main__":
     main()

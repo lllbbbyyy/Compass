@@ -8,12 +8,14 @@
 
 cycle_t CompassModelEngine::calcLatency(){
     auto [allLatency,_]=calcLatencyAndEnergy();
+    (void)_;
     return allLatency;
 }
 
 
 energy_t CompassModelEngine::calcEnergy(){
     auto [_,allEnergy]=calcLatencyAndEnergy();
+    (void)_;
     return allEnergy;
 }
 
