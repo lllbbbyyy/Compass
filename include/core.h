@@ -29,7 +29,7 @@ public:
 		Buffer(vol_t _size = 0, energy_t _rCost = 0, bw_t _rBW = 256, energy_t _wCost = 0, bw_t _wBW = 0);
 	};
 	// Type of MAC unit nums.
-	typedef std::uint16_t numMac_t;
+	typedef std::int64_t numMac_t;
 
 	// Number of MAC units and LR MAC units (vector units for element-wise ops).
 	const numMac_t mac_num, LR_mac_num;
@@ -47,14 +47,14 @@ public:
 
 class PolarCore : public Core{
 public:
-	typedef std::uint8_t vmac_t;
+	typedef std::int64_t vmac_t;
 	struct PESetting{
 		vmac_t vecSize, laneNum;
 		energy_t MACCost;
 		PESetting(vmac_t _vecSize, vmac_t _laneNum, energy_t _macCost);
 	};
 
-	typedef std::uint8_t numpe_t;
+	typedef std::int64_t numpe_t;
 	struct Bus{
 		numpe_t aLen, oLen, totNum; // x for act. y for wgt.
 		energy_t hopCost;
@@ -81,7 +81,7 @@ public:
 
 class EyerissCore : public Core {
 public:
-	typedef std::uint8_t vmac_t;
+	typedef std::int64_t vmac_t;
 	// Eyeriss has a 2D PE array
 	struct PESetting {
 		vmac_t Xarray, Yarray;

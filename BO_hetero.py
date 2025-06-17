@@ -1,27 +1,40 @@
-from hyperopt import fmin, tpe, hp
+from hyperopt import fmin, tpe, hp, Trials
 import json
 import subprocess
 import uuid
 import os
 import csv
+from functools import partial
+import pickle
 
-# 全局可选项定义
-chiplet_count_options = [1, 2, 4, 8,16,24,36,48,64]
-chiplet_type_list = ["NVDLA", "Eyeriss"]
-buffer_size_list = [256,512,1024,2048,4096,8192] #KB
-compute_unit_list = [256, 512, 1024, 2048, 4096,8192]
-nop_bw_options = [32, 64, 128, 256]
-dram_bw_options = [16, 32, 64, 128, 256]
-micro_batch_options = [1, 2, 4, 8, 16,32,64]
+import numpy as np
+
+from BO_params import chiplet_count_options, chiplet_type_list, buffer_size_list, compute_unit_list, nop_bw_options, dram_bw_options, decode_micro_batch_options, prefill_micro_batch_options
+
+micro_batch_options = prefill_micro_batch_options
+
+directory = "./exp_diff/Carch_Cmapping_decode/"
+
+rounds=200
 
 log_id=0
+
+seed = 42
+rstate = np.random.default_rng(seed)  # numpy >= 1.17 推荐的方式
 
 mc_limit=49.14685
 def cost_func(latency, energy, mc):
     # if mc> mc_limit:
     #     return float("inf")
     # return latency*energy
-    return latency*energy*mc
+    return latency*energy*(max(mc,mc_limit)/mc_limit)
+
+algo = partial(tpe.suggest, gamma=0.5, n_startup_jobs=rounds//4)
+
+dirs=[directory,directory+"hardware_params/",directory+"search_out/",directory+"search_log/",directory+"exec_out/"]
+for d in dirs:
+    if not os.path.exists(d):
+        os.makedirs(d, exist_ok=True)
 
 # 构建搜索空间 + 配置记录（用于解码）
 def build_search_space():
@@ -87,12 +100,12 @@ def create_objective(chiplet_configs):
 
         # 保存 JSON 到临时文件
         global log_id
-        json_path = f"./tmp/log/hardware_params/input_{log_id}.json"
-        csv_path = f"./tmp/log/search_res/output_{log_id}.csv"
-        compass_out_path = f"./tmp/log/out/compass_{log_id}.out"
+        json_path = directory+f"hardware_params/input_{log_id}.json"
+        csv_path = directory+f"search_out/output_{log_id}.csv"
+        compass_out_path = directory+f"search_log/compass_{log_id}.out"
         run_cmd= f"./build/compass"
-        compass_config_path = "./config/compass_config_simba_decode.json"
-        res_csv_path = "./tmp/hetero_results_log.csv"
+        compass_config_path = directory+"compass_config_search.json"
+        res_csv_path = directory+"hetero_search_results.csv"
         log_id+=1
 
         try:
@@ -146,7 +159,8 @@ def main():
     space, chiplet_configs = build_search_space()
     objective = create_objective(chiplet_configs)
 
-    best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=100)
+    trials= Trials()
+    best = fmin(fn=objective, space=space, algo=algo, max_evals=rounds, rstate=rstate, trials=trials)
 
     config_index = best["config_index"]
     config = chiplet_configs[config_index]
@@ -188,8 +202,11 @@ def main():
             "buffer_size": buffer_val,
             "compute_units": compute_val
         })
-    with open("./tmp/bo_hetero_best_hardware.json", "w") as f:
+    with open(directory+"best_hardware.json", "w") as f:
         json.dump(config_json, f, indent=2)
+
+    with open(directory+'trials.pkl', "wb") as f:
+        pickle.dump(trials, f)
 
 if __name__ == "__main__":
     main()
