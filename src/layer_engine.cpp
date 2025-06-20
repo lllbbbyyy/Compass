@@ -256,6 +256,9 @@ CompassLayerEngine::LayerCost CompassLayerEngine::calCost(){
 
     //calc intra-chiplet dataflow
     auto mappingRes=coreMapper->genLayerMap(layer, batchSize, wgt_B);
+    // if(!mappingRes.cost.is_valid()){
+    //     DEBUG("layer",layer.get_name(),coreMapper->core().mac_num,coreMapper->core().getSRAMSize());
+    // }
     assert(mappingRes.cost.is_valid());
 
     cost.energy = mappingRes.cost.energy*Ifmfactor*Wgtfactor*Ofmfactor;

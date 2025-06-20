@@ -7,15 +7,16 @@ from functools import partial
 import pickle
 import numpy as np
 import copy
+from pathlib import Path
 
 from BO_params import chiplet_count_options, chiplet_type_list, buffer_size_list, compute_unit_list, nop_bw_options, dram_bw_options, decode_micro_batch_options, prefill_micro_batch_options
 
 micro_batch_options = prefill_micro_batch_options
 
 # 目录设置
-base_directory = "./exp_diff/Carch_Cmapping_decode_hybrid/"
-homo_directory = base_directory + "homo_phase/"
-hetero_directory = base_directory + "hetero_phase/"
+base_directory = Path(__file__).resolve().parent / "exp_diff/Carch_Cmapping_decode_hybrid/"
+homo_directory = base_directory / "homo_phase/"
+hetero_directory = base_directory / "hetero_phase/"
 
 
 # 优化参数
@@ -38,10 +39,10 @@ algo = partial(tpe.suggest, gamma=0.5, n_startup_jobs=init_rounds)
 for phase_dir in [homo_directory, hetero_directory]:
     dirs = [
         phase_dir, 
-        phase_dir + "hardware_params/", 
-        phase_dir + "search_out/", 
-        phase_dir + "search_log/", 
-        phase_dir + "exec_out/"
+        phase_dir / "hardware_params/", 
+        phase_dir / "search_out/", 
+        phase_dir / "search_log/", 
+        phase_dir / "exec_out/"
     ]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
@@ -83,12 +84,12 @@ def create_homo_objective(directory):
             })
         
         global log_id
-        json_path = directory + f"hardware_params/input_{log_id}.json"
-        csv_path = directory + f"search_out/output_{log_id}.csv"
-        compass_out_path = directory + f"search_log/compass_{log_id}.out"
-        run_cmd = "./build/compass"
-        compass_config_path = base_directory + "compass_config_search.json"
-        res_csv_path = directory + "homo_search_results.csv"
+        json_path = directory / f"hardware_params/input_{log_id}.json"
+        csv_path = directory / f"search_out/output_{log_id}.csv"
+        compass_out_path = directory / f"search_log/compass_{log_id}.out"
+        run_cmd = "../../build/compass"
+        compass_config_path = base_directory / "compass_config_search.json"
+        res_csv_path = directory / "homo_search_results.csv"
         log_id += 1
         
         try:
@@ -97,7 +98,7 @@ def create_homo_objective(directory):
             
             with open(compass_out_path, "w") as outfile:
                 subprocess.run([run_cmd, compass_config_path, json_path, csv_path], 
-                              check=True, stdout=outfile, stderr=outfile)
+                              check=True, stdout=outfile, stderr=outfile, cwd=base_directory)
             
             with open(csv_path, "r") as f:
                 header = f.readline()
@@ -187,12 +188,12 @@ def create_hetero_objective(chiplet_configs, directory):
             })
         
         global log_id
-        json_path = directory + f"hardware_params/input_{log_id}.json"
-        csv_path = directory + f"search_out/output_{log_id}.csv"
-        compass_out_path = directory + f"search_log/compass_{log_id}.out"
-        run_cmd = "./build/compass"
-        compass_config_path = base_directory + "compass_config_search.json"
-        res_csv_path = directory + "hetero_search_results.csv"
+        json_path = directory / f"hardware_params/input_{log_id}.json"
+        csv_path = directory / f"search_out/output_{log_id}.csv"
+        compass_out_path = directory / f"search_log/compass_{log_id}.out"
+        run_cmd = "../../build/compass"
+        compass_config_path = base_directory / "compass_config_search.json"
+        res_csv_path = directory / "hetero_search_results.csv"
         log_id += 1
         
         try:
@@ -201,7 +202,7 @@ def create_hetero_objective(chiplet_configs, directory):
             
             with open(compass_out_path, "w") as outfile:
                 subprocess.run([run_cmd, compass_config_path, json_path, csv_path], 
-                              check=True, stdout=outfile, stderr=outfile)
+                              check=True, stdout=outfile, stderr=outfile, cwd=base_directory)
             
             with open(csv_path, "r") as f:
                 header = f.readline()
@@ -380,7 +381,7 @@ def save_best_config(best, chiplet_configs, directory, is_hetero=True):
             })
     
     # 保存最优配置到文件
-    with open(directory + "best_hardware.json", "w") as f:
+    with open(directory / "best_hardware.json", "w") as f:
         json.dump(config_json, f, indent=2)
     
     return config_json
@@ -409,7 +410,7 @@ def main():
     )
     
     # 保存同构优化结果
-    with open(homo_directory + 'homo_trials.pkl', "wb") as f:
+    with open(homo_directory / 'homo_trials.pkl', "wb") as f:
         pickle.dump(homo_trials, f)
     
     # 输出同构最优配置
@@ -438,7 +439,7 @@ def main():
     )
     
     # 保存异构优化结果
-    with open(hetero_directory + 'hetero_trials.pkl', "wb") as f:
+    with open(hetero_directory / 'hetero_trials.pkl', "wb") as f:
         pickle.dump(hetero_trials, f)
     
     # 输出异构最优配置

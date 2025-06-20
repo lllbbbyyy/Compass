@@ -1,22 +1,23 @@
 {
     "seed":42,
     
-    "req_generator_input_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_input_lengths.json",
-    "req_generator_output_length_path":"/home/archlab/lby/chiplet+llm_batch_req/cpp-code/config/simulated_output_lengths.json",
-    "req_number":50,
+    "req_generator_input_length_path":"../../config/sharegpt_input_token_lens.json",
+    "req_generator_output_length_path":"../../config/sharegpt_output_token_lens.json",
     "req_gen_mode":"fixed",
+    "req_number":50,
+
     "req_prefill_number":4,
     "req_decode_number":0,
+    "batch_size":4,
 
     "model_info":{
+        "tiling_size":4096,
         "type":"llm",
         "n_layer":1,
         "d_model":4096,
         "n_head":32,
-        "d_head":128,
-        "tiling_size":4096
+        "d_head":128
     },
-    "batch_size":4,
 
     "dram_num":4,
 

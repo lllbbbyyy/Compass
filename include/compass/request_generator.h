@@ -63,7 +63,6 @@ private:
     std::vector<std::pair<int, std::optional<Req>>> req_cache;
     int batch_size;
     std::vector<Req> res_reqs;
-    const int warmup;
 
     std::vector<int> simulated_input_lengths;
     std::vector<int> simulated_output_lengths;

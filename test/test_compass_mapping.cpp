@@ -2,6 +2,8 @@
 #include <memory>
 #include <future>
 #include <iomanip>
+#include <unistd.h>
+#include <limits.h>
 #include "layer_engine.h"
 #include "core.h"
 #include "nns/nns.h"
@@ -30,6 +32,13 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 
 int main(int argc, char *argv[])
 {
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+        std::cout << "Current directory: " << cwd << std::endl;
+    } else {
+        perror("getcwd() error");
+    }
+
 	std::cout << std::fixed << std::setprecision(2);
 	if (argc != 4)
 	{
@@ -162,7 +171,7 @@ int main(int argc, char *argv[])
 	DEBUG("models created", layer_lens);
 
 	string run_mode= config_j["run_mode"];
-	string best_solution_file=config_j["best_solution_save_path"];
+	string best_solution_file=config_j["best_mapping_save_path"];
 	string detail_latency_file=config_j["detail_latency_save_path"];
 	string detail_energy_file=config_j["detail_energy_save_path"];
 	string detail_mc_file=config_j["detail_mc_save_path"];
@@ -268,19 +277,19 @@ int main(int argc, char *argv[])
 			auto j=model_engine.get_latency_detail();
 			std::ofstream o(detail_latency_file);
 			o << std::setw(4) << j << std::endl;
-			std::cout << "Best solution latency detail saved to " << detail_latency_file << "\n";
+			std::cout << "Best mapping latency detail saved to " << detail_latency_file << "\n";
 		}
 		if(!detail_energy_file.empty()){
 			auto j=model_engine.get_energy_detail();
 			std::ofstream o(detail_energy_file);
 			o << std::setw(4) << j << std::endl;
-			std::cout << "Best solution energy detail saved to " << detail_energy_file << "\n";
+			std::cout << "Best mapping energy detail saved to " << detail_energy_file << "\n";
 		}
 		if(!detail_mc_file.empty()){
 			auto j=model_engine.get_mc_detail();
 			std::ofstream o(detail_mc_file);
 			o << std::setw(4) << j << std::endl;
-			std::cout << "Best solution mc detail saved to " << detail_mc_file << "\n";
+			std::cout << "Mc detail saved to " << detail_mc_file << "\n";
 		}
 		rapidcsv::Document doc;
 		doc.SetColumnName(0, "latency");

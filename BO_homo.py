@@ -6,6 +6,7 @@ import os
 import csv
 from functools import partial
 import pickle
+from pathlib import Path
 
 import numpy as np
 
@@ -13,7 +14,7 @@ from BO_params import chiplet_count_options, chiplet_type_list, buffer_size_list
 
 micro_batch_options = prefill_micro_batch_options
 
-directory = "./exp_diff/Carch_Cmapping_prefill_homo/"
+directory = Path(__file__).resolve().parent / "exp_diff/Carch_Cmapping_prefill_homo/"
 
 rounds=200
 
@@ -31,7 +32,7 @@ def cost_func(latency, energy, mc):
 
 algo = partial(tpe.suggest, gamma=0.5, n_startup_jobs=rounds//4)
 
-dirs=[directory,directory+"hardware_params/",directory+"search_out/",directory+"search_log/",directory+"exec_out/"]
+dirs=[directory,directory/"hardware_params/",directory/"search_out/",directory/"search_log/",directory/"exec_out/"]
 for d in dirs:
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
@@ -79,12 +80,12 @@ def create_objective(chiplet_configs):
 
         # 保存 JSON 到临时文件
         global log_id
-        json_path = directory+f"hardware_params/input_{log_id}.json"
-        csv_path = directory+f"search_out/output_{log_id}.csv"
-        compass_out_path = directory+f"search_log/compass_{log_id}.out"
-        run_cmd= f"./build/compass"
-        compass_config_path = directory+"compass_config_search.json"
-        res_csv_path = directory+"hetero_search_results.csv"
+        json_path = directory/f"hardware_params/input_{log_id}.json"
+        csv_path = directory/f"search_out/output_{log_id}.csv"
+        compass_out_path = directory/f"search_log/compass_{log_id}.out"
+        run_cmd= f"../../build/compass"
+        compass_config_path = directory/"compass_config_search.json"
+        res_csv_path = directory/"hetero_search_results.csv"
         log_id+=1
 
         try:
@@ -93,7 +94,7 @@ def create_objective(chiplet_configs):
 
             # 调用外部评估器.exe
             with open(compass_out_path, "w") as outfile:
-                subprocess.run([run_cmd,compass_config_path, json_path, csv_path], check=True, stdout=outfile, stderr=outfile)
+                subprocess.run([run_cmd,compass_config_path, json_path, csv_path], check=True, stdout=outfile, stderr=outfile, cwd=directory)
 
             # 读取评估结果（latency, energy, mc）
             with open(csv_path, "r") as f:
@@ -168,10 +169,10 @@ def main():
             "buffer_size": buffer_size_list[best['buffer']],
             "compute_units": compute_unit_list[best['compute']]
         })
-    with open(directory+"best_hardware.json", "w") as f:
+    with open(directory/"best_hardware.json", "w") as f:
         json.dump(config_json, f, indent=2)
 
-    with open(directory+'trials.pkl', "wb") as f:
+    with open(directory/'trials.pkl', "wb") as f:
         pickle.dump(trials, f)
 
 if __name__ == "__main__":

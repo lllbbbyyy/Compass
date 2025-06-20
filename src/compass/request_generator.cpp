@@ -13,8 +13,7 @@ std::string ReqGenerator::outputLengthsFile="./config/simulated_output_lengths.j
 
 ReqGenerator::ReqGenerator(int batch_size) 
     : now_id(0),
-      batch_size(batch_size),
-      warmup(4500){
+      batch_size(batch_size){
     
     req_cache.resize(batch_size, {0, std::nullopt});
 
@@ -33,6 +32,7 @@ ReqGenerator::ReqGenerator(int batch_size)
     simulated_output_lengths = output_json.get<std::vector<int>>();
     output_index = 0;
 
+    int warmup = ThreadSafeRandom::rand_int(3000,5000);
     // Warmup
     for (int i = 0; i < warmup; ++i) {
         warmupGenerate();

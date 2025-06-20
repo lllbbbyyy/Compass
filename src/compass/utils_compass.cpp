@@ -66,6 +66,7 @@ std::pair<int, int> closest_factors(int n) {
 std::shared_ptr<EyerissMapper>
 createEyerissCoreMapper(int mac_num, vol_t ubufSize) {
     static constexpr double turnover_factor = 0.3 / 0.5;
+    assert(mac_num%(pex_num*pey_num)==0);
     Core::numMac_t LR_mac_num = mac_num / (pex_num * pey_num);
     auto [arrayX, arrayY] = closest_factors(mac_num);
 
@@ -97,11 +98,8 @@ createEyerissCoreMapper(int mac_num, vol_t ubufSize) {
 
 std::shared_ptr<PolarMapper>
 createPolarCoreMapper(int mac_num, vol_t ubufSize) {
-    auto [vector_len, lane_len] = closest_factors(mac_num);
-    assert(vector_len % pex_num == 0);
-    assert(lane_len   % pey_num == 0);
-    vector_len /= pex_num;
-    lane_len   /= pey_num;
+    assert(mac_num%(pex_num*pey_num)==0);
+    auto [vector_len, lane_len] = closest_factors(mac_num/(pex_num*pey_num));
 
     static constexpr double turnover_factor = 0.3 / 0.5;
     static constexpr energy_t LR_mac_cost   = 0.0873;
@@ -161,8 +159,8 @@ createNoC(mlen_t xlen, mlen_t ylen,
 
     int dram_num_right=dram_num / 2;
     int dram_num_left=dram_num - dram_num_right;
-    size_t left_router_num_per_dram = dram_num_left==0?0:ylen / dram_num_left;
-    size_t right_router_num_per_dram = dram_num_right==0?0:ylen / dram_num_right;
+    size_t left_router_num_per_dram = dram_num_left==0?0:(ylen+dram_num_left-1) / dram_num_left;
+    size_t right_router_num_per_dram = dram_num_right==0?0:(ylen+dram_num_right-1) / dram_num_right;
     assert(left_router_num_per_dram > 0||right_router_num_per_dram);
     std::vector<pos_t> routers;
 
