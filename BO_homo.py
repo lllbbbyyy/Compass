@@ -14,7 +14,8 @@ from BO_params import chiplet_count_options, chiplet_type_list, buffer_size_list
 
 micro_batch_options = prefill_micro_batch_options
 
-directory = Path(__file__).resolve().parent / "exp_diff/Carch_Cmapping_prefill_homo/"
+now_d = Path(__file__).resolve().parent
+directory = now_d / "exp_diff/Carch_Cmapping_prefill_homo/"
 
 rounds=200
 
@@ -83,7 +84,7 @@ def create_objective(chiplet_configs):
         json_path = directory/f"hardware_params/input_{log_id}.json"
         csv_path = directory/f"search_out/output_{log_id}.csv"
         compass_out_path = directory/f"search_log/compass_{log_id}.out"
-        run_cmd= f"../../build/compass"
+        run_cmd= now_d/f"build/compass"
         compass_config_path = directory/"compass_config_search.json"
         res_csv_path = directory/"hetero_search_results.csv"
         log_id+=1

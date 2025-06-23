@@ -14,7 +14,8 @@ from BO_params import chiplet_count_options, chiplet_type_list, buffer_size_list
 micro_batch_options = prefill_micro_batch_options
 
 # 目录设置
-base_directory = Path(__file__).resolve().parent / "exp_diff/Carch_Cmapping_decode_hybrid/"
+now_d = Path(__file__).resolve().parent
+base_directory = now_d / "exp_diff/Carch_Cmapping_decode_hybrid/"
 homo_directory = base_directory / "homo_phase/"
 hetero_directory = base_directory / "hetero_phase/"
 
@@ -191,7 +192,7 @@ def create_hetero_objective(chiplet_configs, directory):
         json_path = directory / f"hardware_params/input_{log_id}.json"
         csv_path = directory / f"search_out/output_{log_id}.csv"
         compass_out_path = directory / f"search_log/compass_{log_id}.out"
-        run_cmd = "../../build/compass"
+        run_cmd = now_d/"build/compass"
         compass_config_path = base_directory / "compass_config_search.json"
         res_csv_path = directory / "hetero_search_results.csv"
         log_id += 1

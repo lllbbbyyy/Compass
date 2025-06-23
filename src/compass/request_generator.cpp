@@ -8,8 +8,8 @@ using json = nlohmann::json;
 Req::Req(int req_id, Req::Type req_type, int req_lens, int req_his_lens)
     : id(req_id), type(req_type), lens(req_lens), his_lens(req_his_lens) {}
 
-std::string ReqGenerator::inputLengthsFile="./config/simulated_input_lengths.json";
-std::string ReqGenerator::outputLengthsFile="./config/simulated_output_lengths.json";
+std::string ReqGenerator::inputLengthsFile="./config/sharegpt_input_token_lens.json";
+std::string ReqGenerator::outputLengthsFile="./config/sharegpt_output_token_lens.json";
 
 ReqGenerator::ReqGenerator(int batch_size) 
     : now_id(0),
