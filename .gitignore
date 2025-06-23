@@ -9,3 +9,5 @@ exp_why_1/
 exp_diff/
 .vscode/
 __pycache__/
+grid_search.py 
+exp_diff_1

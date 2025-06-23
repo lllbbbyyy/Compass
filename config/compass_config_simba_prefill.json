@@ -23,7 +23,7 @@
 
     "run_mode":"GA",
 
-    "best_solution_save_path":"./res_out/simba_prefill/simba_best_solution.json",
+    "best_mapping_save_path":"./res_out/simba_prefill/simba_best_solution.json",
     "search_process_save_path":"./res_out/simba_prefill/simba_search_process.csv",
 
     "GA_population_size":50,

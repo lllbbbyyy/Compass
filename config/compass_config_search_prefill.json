@@ -1,17 +1,17 @@
 {
     "seed":42,
     
-    "req_generator_input_length_path":"./config/sharegpt_input_token_lens.json",
-    "req_generator_output_length_path":"./config/sharegpt_output_token_lens.json",
+    "req_generator_input_length_path":"../../config/sharegpt_input_token_lens.json",
+    "req_generator_output_length_path":"../../config/sharegpt_output_token_lens.json",
     "req_gen_mode":"fixed",
-    "req_number":1,
+    "req_number":30,
 
-    "batch_size":128,
-    "req_prefill_number":0,
-    "req_decode_number":128,
+    "req_prefill_number":4,
+    "req_decode_number":0,
+    "batch_size":4,
 
     "model_info":{
-        "tiling_size":4096,
+        "tiling_size":512,
         "type":"llm",
         "n_layer":1,
         "d_model":4096,
