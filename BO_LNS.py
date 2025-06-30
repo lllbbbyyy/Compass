@@ -13,7 +13,6 @@ import hashlib
 import math
 import random
 from tqdm import tqdm
-from ortools.sat.python import cp_model
 import sys
 
 seed = 42

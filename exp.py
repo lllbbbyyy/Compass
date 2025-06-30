@@ -102,9 +102,9 @@ scale_model_info={
     }
 }
 
-for d in dataset:
-    for w in workload:
-        for s in scale:
+for s in scale:
+    for d in dataset:
+        for w in workload:
             config = config_template.copy()
             config["req_generator_input_length_path"] = f"../../config/{d}_input_token_lens.json"
             config["req_generator_output_length_path"] = f"../../config/{d}_output_token_lens.json"
