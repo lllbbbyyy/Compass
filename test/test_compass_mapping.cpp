@@ -26,8 +26,10 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	len_t d_model = j["d_model"];
 	len_t n_head = j["n_head"];
 	len_t d_head = j["d_head"];
-	len_t tiling_size= j["tiling_size"];
-	return create_GPT3(reqs, n_layers, d_model, n_head, d_head,tiling_size);
+	len_t d_ffn = j["d_ffn"];
+	len_t d_model_tiling_size= j["d_model_tiling_size"];
+	len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
+	return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
 }
 
 int main(int argc, char *argv[])

@@ -10,7 +10,7 @@ decode_micro_batch_options = [1, 2, 4, 8, 16, 32, 64, 128]
 prefill_micro_batch_options = [1, 2, 4]
 mixed_micro_batch_options = [1, 2, 3, 6, 11, 22, 33, 66]
 
-# chiplet_count_options = [1] + list(range(2,65,2))
+# chiplet_count_options = [1] + list(range(2,128+1,2))
 # chiplet_type_list = ["NVDLA", "Eyeriss"]
 # buffer_size_list = list(range(512,65537,512))
 # compute_unit_list = list(range(512,65537,512))

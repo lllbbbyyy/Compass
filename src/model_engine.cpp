@@ -178,7 +178,7 @@ mc_t CompassModelEngine::calcMonetaryCost() {
 	static constexpr double control_unit_prop = 1.05;
 	static constexpr double DFT_prop = 1.05;
 	//*********************DIE AREA*********************
-    auto compute_die_num=coreMappers.size();
+    //auto compute_die_num=coreMappers.size();
 
     double compute_die_area=0;
     std::vector<double> compute_dir_areas;
@@ -201,7 +201,7 @@ mc_t CompassModelEngine::calcMonetaryCost() {
     //128GB/s has 3mm2 area
 	double PCIe_area = 3 mm2 * noc->DRAM_total_bw / 128;
     // *2指的是两边
-	double IO_die_area = noc->DRAM_total_bw / 44.0 * (DDR_PHY_den+DDR_ctrl_den)+ PCIe_area+(compute_die_num==1?0:(NoP_len*NoP_wid* noc->NoC_bw / 4 *noc->ylen*2));//neglect other IOs
+	double IO_die_area = noc->DRAM_total_bw / 44.0 * (DDR_PHY_den+DDR_ctrl_den)+ PCIe_area+(NoP_len*NoP_wid* noc->NoC_bw / 4 *noc->ylen*2);//neglect other IOs
 
 	IO_die_area *= (control_unit_prop * DFT_prop);
 	double total_die_area = compute_die_area + IO_die_area;
@@ -219,10 +219,7 @@ mc_t CompassModelEngine::calcMonetaryCost() {
 	// 	}
 	// }
 	//*********************DIE AREA*********************
-	if (coreMappers.size() == 1) {
-		os_cost_factor = 1;
-	}
-	else if (os_area <= 30.0 * 30 mm2) {
+    if (os_area <= 30.0 * 30 mm2) {
 		os_cost_factor = 1.5;
 	}
 	else if (os_area <= 55.0 * 55 mm2) {
@@ -238,27 +235,19 @@ mc_t CompassModelEngine::calcMonetaryCost() {
 	double cost_compute = 0;
 	double cost_IO = 0;
 	double cost_os_overall = 0;
-	double yield_soc = 0;
-	double cost_soc = 0;
-	if (compute_die_num != 1) {
-        for(auto die_area:compute_dir_areas){
-            yield_compute_die = pow(yield, die_area / (40 mm2));
-            cost_compute += die_area / yield_compute_die / 1000000 * cost_silicon_mm_compute/wafer_util(die_area);
-        }
-        double IO_die_per_area=IO_die_area / noc->DRAM_num;
-		yield_IO_die = pow(yield, IO_die_per_area / (40 mm2));
-		cost_IO = IO_die_area / 1000000 * cost_silicon_mm_IO/ wafer_util(IO_die_per_area)/yield_IO_die + noc->DRAM_total_bw / 44.0 * ddr_cost;
-		cost_os_overall = os_area * os_cost_factor / 1000000 * cost_os;
-		cost_overall = cost_compute + cost_IO + cost_os_overall;
-	}
-	else {
-		yield_soc = pow(yield, total_die_area / (40 mm2));
-		cost_soc = total_die_area / yield_soc / 1000000 * cost_silicon_mm_compute/ wafer_util(total_die_area) + noc->DRAM_total_bw / 44.0 * ddr_cost;
-		cost_os_overall = os_area * os_cost_factor / 1000000 * cost_os;
-		cost_compute = cost_soc;
-		cost_IO = 0;
-		cost_overall = cost_soc + cost_os_overall;
-	}
+	//double yield_soc = 0;
+	//double cost_soc = 0;
+
+    for(auto die_area:compute_dir_areas){
+        yield_compute_die = pow(yield, die_area / (40 mm2));
+        cost_compute += die_area / yield_compute_die / 1000000 * cost_silicon_mm_compute/wafer_util(die_area);
+    }
+    double IO_die_per_area=IO_die_area / noc->DRAM_num;
+    yield_IO_die = pow(yield, IO_die_per_area / (40 mm2));
+    cost_IO = IO_die_area / 1000000 * cost_silicon_mm_IO/ wafer_util(IO_die_per_area)/yield_IO_die + noc->DRAM_total_bw / 44.0 * ddr_cost;
+    cost_os_overall = os_area * os_cost_factor / 1000000 * cost_os;
+    cost_overall = cost_compute + cost_IO + cost_os_overall;
+
     mcCost.compute_die_area=compute_die_area;
     mcCost.IO_die_area=IO_die_area;
     mcCost.os_area=os_area;

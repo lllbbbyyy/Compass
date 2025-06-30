@@ -9,28 +9,37 @@ import numpy as np
 import copy
 import time
 from pathlib import Path
+import hashlib
+import math
+
+evaluated_points = {}
 
 from BO_params import chiplet_count_options, chiplet_type_list, buffer_size_list, compute_unit_list, nop_bw_options, dram_bw_options, decode_micro_batch_options, prefill_micro_batch_options
 
-micro_batch_options = prefill_micro_batch_options
+micro_batch_options = decode_micro_batch_options
 
 # 目录设置
 now_d = Path(__file__).resolve().parent
-base_directory = now_d / "exp_diff/Carch_Cmapping_decode_hybrid/"
+base_directory = now_d / "exp_diff_1/Carch_Cmapping_decode_hybrid_edmc/"
 homo_directory = base_directory / "homo_phase/"
 hetero_directory = base_directory / "hetero_phase/"
 
 # 优化参数
-homo_rounds = 500  # 同构优化轮数
-hetero_rounds = 500  # 异构优化轮数
-init_rounds = 50
+homo_rounds = 100  # 同构优化轮数
+hetero_rounds = 100  # 异构优化轮数
+init_rounds = 25
 
 seed = 42
 rstate = np.random.default_rng(seed)
 
 mc_limit = 49.14685
+compute_limit=36*1024
 
-def cost_func(latency, energy, mc):
+def cost_func(latency, energy, mc, config):
+    total_compute_units=0
+    for c in config["chiplets"]:
+        total_compute_units+=c["compute_units"]
+    return latency * energy * mc * math.fabs(total_compute_units-compute_limit)**2
     return latency * energy * (max(mc, mc_limit) / mc_limit)
 
 # 确保所有目录存在
@@ -62,6 +71,8 @@ def create_homo_objective(directory):
     log_id = 0
     
     def objective(params):
+        global evaluated_points
+
         nonlocal log_id, first_flag
         
         num_chiplets = chiplet_count_options[params["chiplet_count_options"]]
@@ -91,22 +102,31 @@ def create_homo_objective(directory):
         compass_config_path = base_directory / "compass_config_search.json"
         res_csv_path = directory / "homo_search_results.csv"
         log_id += 1
-        
+
         try:
             with open(json_path, "w") as f:
                 json.dump(config_json, f, indent=2)
+
+            # 生成有序的json字符串作为哈希输入
+            config_str = json.dumps(config_json, sort_keys=True)
+            key = hashlib.sha256(config_str.encode('utf-8')).hexdigest()
             
-            with open(compass_out_path, "w") as outfile:
-                subprocess.run([run_cmd, compass_config_path, json_path, csv_path], 
-                              check=True, stdout=outfile, stderr=outfile, cwd=base_directory)
+            if key in evaluated_points:
+                latency, energy, mc = evaluated_points[key]
+                total_cost = cost_func(latency, energy, mc, config_json)*10
+            else:
+
+                with open(compass_out_path, "w") as outfile:
+                    subprocess.run([run_cmd, compass_config_path, json_path, csv_path], 
+                                check=True, stdout=outfile, stderr=outfile, cwd=base_directory)
+                
+                with open(csv_path, "r") as f:
+                    header = f.readline()
+                    values = f.readline().strip().split(",")
+                    latency, energy, mc = map(float, values[:3])
+                total_cost = cost_func(latency, energy, mc, config_json)
             
-            with open(csv_path, "r") as f:
-                header = f.readline()
-                values = f.readline().strip().split(",")
-                latency, energy, mc = map(float, values[:3])
-            
-            total_cost = cost_func(latency, energy, mc)
-            
+            evaluated_points[key] = (latency, energy, mc)
             if first_flag:
                 if os.path.exists(res_csv_path):
                     os.remove(res_csv_path)
@@ -153,6 +173,7 @@ def create_hetero_finetune_objective(fixed_config, directory):
     num_chiplets = fixed_config["num_chiplets"]
     
     def objective(params):
+        global evaluated_points
         nonlocal log_id, first_flag
         
         # 使用固定的全局参数
@@ -190,18 +211,27 @@ def create_hetero_finetune_objective(fixed_config, directory):
         try:
             with open(json_path, "w") as f:
                 json.dump(config_json, f, indent=2)
+
+            config_str = json.dumps(config_json, sort_keys=True)
+            key = hashlib.sha256(config_str.encode('utf-8')).hexdigest()
             
-            with open(compass_out_path, "w") as outfile:
-                subprocess.run([run_cmd, compass_config_path, json_path, csv_path], 
-                              check=True, stdout=outfile, stderr=outfile, cwd=base_directory)
+            if key in evaluated_points:
+                latency, energy, mc = evaluated_points[key]
+                total_cost = cost_func(latency, energy, mc, config_json)*10
+            else:
             
-            with open(csv_path, "r") as f:
-                header = f.readline()
-                values = f.readline().strip().split(",")
-                latency, energy, mc = map(float, values[:3])
+                with open(compass_out_path, "w") as outfile:
+                    subprocess.run([run_cmd, compass_config_path, json_path, csv_path], 
+                                check=True, stdout=outfile, stderr=outfile, cwd=base_directory)
+                
+                with open(csv_path, "r") as f:
+                    header = f.readline()
+                    values = f.readline().strip().split(",")
+                    latency, energy, mc = map(float, values[:3])
+                
+                total_cost = cost_func(latency, energy, mc, config_json)
             
-            total_cost = cost_func(latency, energy, mc)
-            
+            evaluated_points[key] = (latency, energy, mc)
             if first_flag:
                 if os.path.exists(res_csv_path):
                     os.remove(res_csv_path)

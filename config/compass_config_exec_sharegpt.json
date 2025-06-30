@@ -1,10 +1,10 @@
 {
-    "seed":42,
+    "seed":43,
     
     "req_generator_input_length_path":"../../config/sharegpt_input_token_lens.json",
     "req_generator_output_length_path":"../../config/sharegpt_output_token_lens.json",
     "req_gen_mode":"fixed",
-    "req_number":1,
+    "req_number":500,
 
     "req_prefill_number":0,
     "req_decode_number":128,
@@ -21,16 +21,16 @@
 
     "dram_num":4,
 
-    "run_mode":"GA",
+    "run_mode":"exec",
 
-    "best_mapping_save_path":"./search_out/best_mapping.json",
-    "search_process_save_path":"",
+    "best_mapping_save_path":"./res_out/simba_best_solution.json",
+    "search_process_save_path":"./res_out/simba_search_process.json",
 
     "GA_population_size":50,
     "GA_generations":200,
 
-    "exec_load_path":"",
-    "detail_latency_save_path":"",
+    "exec_load_path":"./best_mapping.json",
+    "detail_latency_save_path":"./exec_latency_detail.json",
     "detail_energy_save_path":"",
     "detail_mc_save_path":""
 }
