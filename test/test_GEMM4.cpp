@@ -22,7 +22,6 @@ int main()
 
 	int init_chip_number = 4;
 	int batch_size = 4;
-	int micro_batch_size = 2;
 
 	vector<shared_ptr<CoreMapper>> chips;
 	for (int i = 0; i < init_chip_number; i++)
@@ -37,24 +36,7 @@ int main()
 
 	ReqGenerator generator(batch_size);
 	vector<shared_ptr<Network>> batched_models;
-	auto batches = generator.generateReq(micro_batch_size);
-	for (int i : tqdm(batch_size / micro_batch_size))
-	{
-		DEBUG("batch", i);
-		for (auto &req : batches[i])
-		{
-			DEBUG("	", req);
-		}
-	}
-	// exit(0);
-	// for(int i : tqdm(batch_size/micro_batch_size)){
-	// 	//auto n=create_GPT3(batches[i],32,4096,32,128);
-	// 	cout<<128*(i+1)<<endl;
-	// 	auto n=GEMM4(128*(i+1));
-	// 	//auto n =gen_convs(36);
-	// 	//auto n=create_GPT3(batches[i],1,256,8,32);
-	// 	batched_models.emplace_back(n);
-	// }
+
 	auto n1 = GEMM4(128);
 	batched_models.emplace_back(n1);
 	auto n2 = GEMM4(256);
@@ -71,26 +53,11 @@ int main()
 	}
 	DEBUG("models created", layer_lens);
 
-	auto ga_engine = GA(batched_models, chips, noc);
-	ga_engine.run();
-	CompassLayerEngine::debug_detail = true;
-	ga_engine.save_latency_detail("tmp/convs4_best_solution.json");
-	ga_engine.save_progress("tmp/conv4_progress.csv");
-	cout << "Best solution segmentation: " << endl;
-	for (auto i : ga_engine.best_solution.segmentation)
-	{
-		cout << i << ' ';
-	}
-	cout << endl;
-	cout << "Best solution mapping: " << endl;
-	for (auto &v : ga_engine.best_solution.layerToChip)
-	{
-		for (auto i : v)
-		{
-			cout << i << ' ';
-		}
-		cout << endl;
-	}
+	CompassModelEngine model_engine(batched_models, chips, noc,{1,0,0},{{0,0,2,2},{1,0,1,2},{2,0,1,2},{3,1,3,2}});
+	model_engine.calcLatencyAndEnergy();
+	auto j=model_engine.get_latency_detail();
+	std::ofstream o("tmp/GEMM4_latency_detail.json");
+    o << std::setw(4) << j << std::endl;
 
 	return 0;
 }

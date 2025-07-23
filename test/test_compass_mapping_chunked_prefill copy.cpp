@@ -29,15 +29,7 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	len_t d_ffn = j["d_ffn"];
 	len_t d_model_tiling_size= j["d_model_tiling_size"];
 	len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
-	string type= j["type"];
-	if (type=="llama3"){
-		len_t n_kv_heads = j["n_kv_head"];
-		return create_llama3(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
-	}
-	else if(type=="gpt3"){
-		return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
-	}
-	return nullptr;
+	return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
 }
 
 int main(int argc, char *argv[])
@@ -136,8 +128,10 @@ int main(int argc, char *argv[])
 
 	auto model_info = config_j["model_info"];
 	string model_type = model_info["type"];
+    int chunked_prefill_size = 2048;
 	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{
+        auto chunked_prefill_req=Req(0, Req::Type::ChunkedPrefill, chunked_prefill_size, j*chunked_prefill_size);
 		batchedReqs_t batches;
 		if(req_gen_mode=="normal"){
 			batches = generator.generateReq(micro_batch_size);
@@ -148,6 +142,7 @@ int main(int argc, char *argv[])
 		else{
 			assert(0);
 		}
+        batches[batch_size / micro_batch_size-1][micro_batch_size-1]=chunked_prefill_req;
 		std::shared_ptr<Network> n;
 		DEBUG("model",j);
 		for (int i=0;i<batch_size / micro_batch_size;i++)
@@ -161,7 +156,7 @@ int main(int argc, char *argv[])
 			
 			// auto n =gen_convs(36);
 			// auto n=create_GPT3(batches[i],1,256,8,32);
-			if(model_type=="gpt3"||model_type=="llama3"){
+			if(model_type=="llm"){
 				n = create_llm(model_info, batches[i]);
 			}
 			else{
@@ -198,7 +193,6 @@ int main(int argc, char *argv[])
 	if(run_mode=="GA"){
 		auto ga_engine = GA(batched_models, chips, noc);
 		ga_engine.run();
-		auto [l, e, m] = ga_engine.get_best_res();
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
@@ -209,6 +203,7 @@ int main(int argc, char *argv[])
 			ga_engine.save_mc_detail(detail_mc_file);
 		if(!search_process_file.empty())
 			ga_engine.save_progress(search_process_file);
+		auto [l, e, m] = ga_engine.get_best_res();
 		latency = l;
 		energy = e;
 		mc = m;
@@ -216,7 +211,6 @@ int main(int argc, char *argv[])
 	else if(run_mode=="random"){
 		auto ga_engine = GA(batched_models, chips, noc);
 		ga_engine.random_run();
-		auto [l, e, m] = ga_engine.get_best_res();
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
@@ -227,6 +221,7 @@ int main(int argc, char *argv[])
 			ga_engine.save_mc_detail(detail_mc_file);
 		if(!search_process_file.empty())
 			ga_engine.save_progress(search_process_file);
+		auto [l, e, m] = ga_engine.get_best_res();
 		latency = l;
 		energy = e;
 		mc = m;
@@ -276,7 +271,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		CompassModelEngine model_engine(batched_models.back(), chips, noc, segmentation, layerToChip);
+		CompassModelEngine model_engine(batched_models[0], chips, noc, segmentation, layerToChip);
 		auto m=model_engine.calcMonetaryCost();
 		latency=total_latency/total;
 		energy=total_energy/total;

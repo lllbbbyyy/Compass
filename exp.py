@@ -121,7 +121,8 @@ for s in scale:
             with open(dir+filename, 'w') as f:
                 json.dump(config, f, indent=4)
             # create exec config
-            config['req_number']=500
+            config['seed']+=1
+            config['req_number']=300
             config['run_mode']='exec'
             config['detail_latency_save_path']='./exec_latency_detail.json'
             config['detail_energy_save_path']='./exec_energy_detail.json'
@@ -129,10 +130,10 @@ for s in scale:
             filename = f"compass_config_exec.json"
             with open(dir+filename, 'w') as f:
                 json.dump(config, f, indent=4)
-            
-            with open(dir+'exp_out.log', "w") as outfile:
-                subprocess.run(['python3','BO_LNS.py', dir, w, str(s)], 
-                check=True, stdout=outfile, stderr=outfile)
+
+            # with open(dir+'exp_out.log', "w") as outfile:
+            #     subprocess.run(['python3','BO_LNS.py', dir, w, str(s)], 
+            #     check=True, stdout=outfile, stderr=outfile)
             
             exec_file=dir+'exec.sh'
             search_file=dir+'search.sh'

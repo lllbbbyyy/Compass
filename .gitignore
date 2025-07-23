@@ -6,7 +6,8 @@ validation/
 res_out/
 exp_why_1/
 .vscode/
-exp_diff*/
+exp*/
 .vscode/
 __pycache__/
 grid_search.py 
+DSE_hardware/

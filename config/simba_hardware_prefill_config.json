@@ -2,7 +2,7 @@
   "num_chiplets": 36,
   "nop_bw": 13,
   "dram_bw": 36,
-  "micro_batch": 1,
+  "micro_batch": 4,
   "chiplets": [
     {
       "type": "NVDLA",

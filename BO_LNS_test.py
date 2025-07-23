@@ -48,7 +48,7 @@ GRANULARITY = 512  # 所有资源调整的基本单位
 
 chiplet_count_options = [1, 2, 4, 8, 16, 32, 64, 128]
 if len(sys.argv) >= 4 and int(sys.argv[3])==72:
-    chiplet_count_options = [1, 2, 4, 6, 12, 18, 24, 36]
+    chiplet_count_options = [1, 2, 4, 6, 12, 18, 24, 36, 72]
 chiplet_type_list = ["NVDLA", "Eyeriss"]
 buffer_size_list = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]  # 这些值已经是512的倍数
 nop_bw_options = [32, 64, 128, 256] 
@@ -102,7 +102,7 @@ def evaluate_config(config, directory, log_id):
     json_path = directory / f"hardware_params/input_{log_id}.json"
     csv_path = directory / f"search_out/output_{log_id}.csv"
     compass_out_path = directory / f"search_log/compass_{log_id}.out"
-    run_cmd = now_d / "build/compass_orca"
+    run_cmd = now_d / "build/compass"
     compass_config_path = base_directory / "compass_config_search.json"
     res_csv_path = directory / "search_results.csv"
     
@@ -264,7 +264,7 @@ class LNSOptimizer:
         patience = early_stop_tries
         
         # 温度参数（用于模拟退火）
-        initial_temp = self.best_cost*(0.1/3)
+        initial_temp = self.best_cost*(0.1/5)
         cooling_rate = 0.95
         current_temp = initial_temp
         
@@ -389,14 +389,17 @@ class LNSOptimizer:
 
     def apply_buffer_adjust(self, solution):
         """存储调整算子：随机选择一个芯粒变更其存储大小"""
-        # 随机选择一个芯粒
         idx = random.randint(0, self.num_chiplets - 1)
         
         # 获取当前存储大小
         current_buffer = solution[self.buffer_vars[idx]]
         
         # 随机选择新的存储大小（从预定义列表中）
-        new_buffer = GRANULARITY*random.randint(1, max(buffer_size_list)//GRANULARITY)  # 确保是GRANULARITY的倍数
+        new_buffer = random.choice(buffer_size_list)
+        
+        # 确保新值不同于当前值
+        while new_buffer == current_buffer and len(buffer_size_list) > 1:
+            new_buffer = random.choice(buffer_size_list)
         
         # 应用变更
         solution[self.buffer_vars[idx]] = new_buffer

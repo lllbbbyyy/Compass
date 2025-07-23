@@ -18,7 +18,8 @@ public:
     // 定义请求类型枚举
     enum class Type {
         Prefill,
-        Decode
+        Decode,
+        ChunkedPrefill
     };
     int id;
     Type type; 
@@ -35,6 +36,9 @@ public:
                 break;
             case Type::Decode:
                 type_str = "Decode";
+                break;
+            case Type::ChunkedPrefill:
+                type_str = "ChunkedPrefill";
                 break;
         }
         os << "id:" << req.id 

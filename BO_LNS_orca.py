@@ -102,7 +102,7 @@ def evaluate_config(config, directory, log_id):
     json_path = directory / f"hardware_params/input_{log_id}.json"
     csv_path = directory / f"search_out/output_{log_id}.csv"
     compass_out_path = directory / f"search_log/compass_{log_id}.out"
-    run_cmd = now_d / "build/compass_orca"
+    run_cmd = now_d / "build/compass"
     compass_config_path = base_directory / "compass_config_search.json"
     res_csv_path = directory / "search_results.csv"
     
@@ -170,7 +170,8 @@ def build_homo_space():
         "chiplet_type": hp.choice("chiplet_type", list(range(len(chiplet_type_list)))),
         "nop_bw": hp.choice("nop_bw", list(range(len(nop_bw_options)))),
         "dram_bw": hp.choice("dram_bw", list(range(len(dram_bw_options)))),
-        "micro_batch": hp.choice("micro_batch", list(range(len(micro_batch_options)))),
+        "micro_batch_prefill": hp.choice("micro_batch", list(range(len(prefill_micro_batch_options)))),
+        "micro_batch_decode": hp.choice("micro_batch", list(range(len(decode_micro_batch_options)))),
         "buffer": hp.choice("buffer", list(range(len(buffer_size_list)))),
     }
 
@@ -188,23 +189,37 @@ def create_homo_objective(directory):
         # 自动计算计算单元数
         compute = calculate_compute_units(num_chiplets)
         
-        config = {
+        prefill_config = {
             "num_chiplets": num_chiplets,
             "nop_bw": nop_bw_options[params["nop_bw"]],
             "dram_bw": dram_bw_options[params["dram_bw"]],
-            "micro_batch": micro_batch_options[params["micro_batch"]],
+            "micro_batch": prefill_micro_batch_options[params["micro_batch_prefill"]],
+            "chiplets": []
+        }
+
+        decode_config = {
+            "num_chiplets": num_chiplets,
+            "nop_bw": nop_bw_options[params["nop_bw"]],
+            "dram_bw": dram_bw_options[params["dram_bw"]],
+            "micro_batch": decode_micro_batch_options[params["micro_batch_decode"]],
             "chiplets": []
         }
         
         for _ in range(num_chiplets):
-            config["chiplets"].append({
+            prefill_config["chiplets"].append({
+                "type": chiplet_type,
+                "buffer_size": buffer,
+                "compute_units": compute
+            })
+            decode_config["chiplets"].append({
                 "type": chiplet_type,
                 "buffer_size": buffer,
                 "compute_units": compute
             })
         
         # 评估配置
-        _, _, _, total_cost = evaluate_config(config, directory, log_id)
+        _, _, _, total_cost_prefill = evaluate_config(prefill_config, directory, log_id)
+        _, _, _, total_cost_decode = evaluate_config(decode_config, directory, log_id)
         log_id += 1
         
         return total_cost

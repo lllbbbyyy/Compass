@@ -136,8 +136,10 @@ int main(int argc, char *argv[])
 
 	auto model_info = config_j["model_info"];
 	string model_type = model_info["type"];
+	int chunked_prefill_size = 2048;
 	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{
+		auto chunked_prefill_req=Req(0, Req::Type::ChunkedPrefill, chunked_prefill_size, j*chunked_prefill_size);
 		batchedReqs_t batches;
 		if(req_gen_mode=="normal"){
 			batches = generator.generateReq(micro_batch_size);
@@ -148,6 +150,7 @@ int main(int argc, char *argv[])
 		else{
 			assert(0);
 		}
+		batches[batch_size / micro_batch_size-1][micro_batch_size-1]=chunked_prefill_req;
 		std::shared_ptr<Network> n;
 		DEBUG("model",j);
 		for (int i=0;i<batch_size / micro_batch_size;i++)
@@ -198,7 +201,6 @@ int main(int argc, char *argv[])
 	if(run_mode=="GA"){
 		auto ga_engine = GA(batched_models, chips, noc);
 		ga_engine.run();
-		auto [l, e, m] = ga_engine.get_best_res();
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
@@ -209,6 +211,7 @@ int main(int argc, char *argv[])
 			ga_engine.save_mc_detail(detail_mc_file);
 		if(!search_process_file.empty())
 			ga_engine.save_progress(search_process_file);
+		auto [l, e, m] = ga_engine.get_best_res();
 		latency = l;
 		energy = e;
 		mc = m;
@@ -216,7 +219,6 @@ int main(int argc, char *argv[])
 	else if(run_mode=="random"){
 		auto ga_engine = GA(batched_models, chips, noc);
 		ga_engine.random_run();
-		auto [l, e, m] = ga_engine.get_best_res();
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
@@ -227,6 +229,7 @@ int main(int argc, char *argv[])
 			ga_engine.save_mc_detail(detail_mc_file);
 		if(!search_process_file.empty())
 			ga_engine.save_progress(search_process_file);
+		auto [l, e, m] = ga_engine.get_best_res();
 		latency = l;
 		energy = e;
 		mc = m;

@@ -136,8 +136,10 @@ int main(int argc, char *argv[])
 
 	auto model_info = config_j["model_info"];
 	string model_type = model_info["type"];
+	int prefill_size = 2048*5;
 	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{
+		auto prefill_req=Req(0, Req::Type::Prefill, prefill_size, 0);
 		batchedReqs_t batches;
 		if(req_gen_mode=="normal"){
 			batches = generator.generateReq(micro_batch_size);
@@ -147,6 +149,9 @@ int main(int argc, char *argv[])
 		}
 		else{
 			assert(0);
+		}
+		if(num_prefill>0){
+			batches[0][0]=prefill_req;
 		}
 		std::shared_ptr<Network> n;
 		DEBUG("model",j);

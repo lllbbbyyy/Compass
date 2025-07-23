@@ -46,20 +46,20 @@ std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers
 			{
 				const auto& req=reqs[k];
 				std::string name_mul=name+"_req"+std::to_string(k);
-				if(req.type==Req::Type::Prefill)
+				if(req.type==Req::Type::Prefill||(req.type==Req::Type::ChunkedPrefill&&req.his_lens==0))
 				{
 					QK = n->add(NLAYER(name_mul+"_QK_P", Conv, C=d_head,K=req.lens, H=req.lens, W=1), {Q},0,{}, {K});
 					QK_elt = n->add(NLAYER(name_mul+"_QK_elt_P", PTP, K=req.lens,H=req.lens, W=1), {QK});
 					QKV = n->add(NLAYER(name_mul+"_QKV_P", Conv, C=req.lens,K=d_head, H=req.lens, W=1), {QK_elt},0,{}, {V});
 				}
-				else if(req.type==Req::Type::Decode)
+				else if(req.type==Req::Type::Decode||(req.type==Req::Type::ChunkedPrefill&&req.his_lens!=0))
 				{
 					// all K and V from DRAM after calculating newK and newV
 					InputData k_cache("k_cache", fmap_shape(req.his_lens, d_head, 1)); // transposed K cache
 					InputData v_cache("v_cache", fmap_shape(req.his_lens, d_head, 1)); // V cache
-					QK = n->add(NLAYER(name_mul+"_QK_D", Conv, C=d_head,K=req.his_lens+1, H=1, W=1), {Q},0,{}, {K}, {k_cache});
-					QK_elt = n->add(NLAYER(name_mul+"_QK_elt_D", PTP, K=1*(req.his_lens+1),H=1, W=1), {QK});
-					QKV = n->add(NLAYER(name_mul+"_QKV_D", Conv, C=req.his_lens+1,K=d_head, H=1, W=1), {QK_elt},0,{}, {V}, {v_cache});
+					QK = n->add(NLAYER(name_mul+"_QK_D", Conv, C=d_head,K=req.his_lens+req.lens, H=req.lens, W=1), {Q},0,{}, {K}, {k_cache});
+					QK_elt = n->add(NLAYER(name_mul+"_QK_elt_D", PTP, K=req.his_lens+req.lens,H=req.lens, W=1), {QK});
+					QKV = n->add(NLAYER(name_mul+"_QKV_D", Conv, C=req.his_lens+req.lens,K=d_head, H=req.lens, W=1), {QK_elt},0,{}, {V}, {v_cache});
 				}
 				QKVs.push_back(QKV);
 			}
@@ -164,20 +164,20 @@ std::shared_ptr<Network> create_llama3(
 			{
 				const auto& req=reqs[k];
 				std::string name_mul=name+"_req"+std::to_string(k);
-				if(req.type==Req::Type::Prefill)
+				if(req.type==Req::Type::Prefill||(req.type==Req::Type::ChunkedPrefill&&req.his_lens==0))
 				{
 					QK = n->add(NLAYER(name_mul+"_QK_P", Conv, C=d_head,K=req.lens, H=req.lens, W=1), {Q},0,{}, {K});
 					QK_elt = n->add(NLAYER(name_mul+"_QK_elt_P", PTP, K=req.lens,H=req.lens, W=1), {QK});
 					QKV = n->add(NLAYER(name_mul+"_QKV_P", Conv, C=req.lens,K=d_head, H=req.lens, W=1), {QK_elt},0,{}, {V});
 				}
-				else if(req.type==Req::Type::Decode)
+				else if(req.type==Req::Type::Decode||(req.type==Req::Type::ChunkedPrefill&&req.his_lens!=0))
 				{
 					// all K and V from DRAM after calculating newK and newV
 					InputData k_cache("k_cache", fmap_shape(req.his_lens, d_head, 1)); // transposed K cache
 					InputData v_cache("v_cache", fmap_shape(req.his_lens, d_head, 1)); // V cache
-					QK = n->add(NLAYER(name_mul+"_QK_D", Conv, C=d_head,K=req.his_lens+1, H=1, W=1), {Q},0,{}, {K}, {k_cache});
-					QK_elt = n->add(NLAYER(name_mul+"_QK_elt_D", PTP, K=1*(req.his_lens+1),H=1, W=1), {QK});
-					QKV = n->add(NLAYER(name_mul+"_QKV_D", Conv, C=req.his_lens+1,K=d_head, H=1, W=1), {QK_elt},0,{}, {V}, {v_cache});
+					QK = n->add(NLAYER(name_mul+"_QK_D", Conv, C=d_head,K=req.his_lens+req.lens, H=req.lens, W=1), {Q},0,{}, {K}, {k_cache});
+					QK_elt = n->add(NLAYER(name_mul+"_QK_elt_D", PTP, K=req.his_lens+req.lens,H=req.lens, W=1), {QK});
+					QKV = n->add(NLAYER(name_mul+"_QKV_D", Conv, C=req.his_lens+req.lens,K=d_head, H=req.lens, W=1), {QK_elt},0,{}, {V}, {v_cache});
 				}
 				QKVs.push_back(QKV);
 			}

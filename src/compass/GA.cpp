@@ -448,7 +448,7 @@ std::tuple<cycle_t, energy_t, mc_t> GA::get_best_res()
             total_energy += energy;
         }
     }
-    auto mc = engines[0][0]->calcMonetaryCost();
+    auto mc = engines.back()[0]->calcMonetaryCost();
     return {total_latency/engines.size(), total_energy/engines.size(), mc};
 }
 
@@ -470,9 +470,9 @@ void GA::save_best_solution(const std::string &filename,int micro_batch_size)
 void GA::save_latency_detail(const std::string &filename)
 {
     nlohmann::json j;
-    engines[0][0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
-    engines[0][0]->calcLatencyAndEnergy();
-    j=engines[0][0]->get_latency_detail();
+    engines.back()[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
+    engines.back()[0]->calcLatencyAndEnergy();
+    j=engines.back()[0]->get_latency_detail();
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution latency detail saved to " << filename << "\n";
@@ -481,9 +481,9 @@ void GA::save_latency_detail(const std::string &filename)
 void GA::save_energy_detail(const std::string &filename)
 {
     nlohmann::json j;
-    engines[0][0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
-    engines[0][0]->calcLatencyAndEnergy();
-    j=engines[0][0]->get_energy_detail();
+    engines.back()[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
+    engines.back()[0]->calcLatencyAndEnergy();
+    j=engines.back()[0]->get_energy_detail();
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution energy detail saved to " << filename << "\n";
@@ -492,8 +492,8 @@ void GA::save_energy_detail(const std::string &filename)
 void GA::save_mc_detail(const std::string &filename)
 {
     nlohmann::json j;
-    engines[0][0]->calcMonetaryCost();
-    j=engines[0][0]->get_mc_detail();
+    engines.back()[0]->calcMonetaryCost();
+    j=engines.back()[0]->get_mc_detail();
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution mc detail saved to " << filename << "\n";

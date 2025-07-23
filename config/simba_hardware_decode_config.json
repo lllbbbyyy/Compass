@@ -1,0 +1,188 @@
+{
+  "num_chiplets": 36,
+  "nop_bw": 13,
+  "dram_bw": 36,
+  "micro_batch": 128,
+  "chiplets": [
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    },
+    {
+      "type": "NVDLA",
+      "buffer_size": 1024,
+      "compute_units": 1024
+    }
+  ]
+}
