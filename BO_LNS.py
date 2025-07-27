@@ -101,7 +101,7 @@ def evaluate_config(config, directory, log_id):
     json_path = directory / f"hardware_params/input_{log_id}.json"
     csv_path = directory / f"search_out/output_{log_id}.csv"
     compass_out_path = directory / f"search_log/compass_{log_id}.out"
-    run_cmd = now_d / "build/compass_orca"
+    run_cmd = now_d / "build/compass"
     compass_config_path = base_directory / "compass_config_search.json"
     res_csv_path = directory / "search_results.csv"
     
