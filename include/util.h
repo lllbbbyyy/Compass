@@ -172,14 +172,13 @@ struct fmap_range{
 
 class ThreadSafeRandom {
 public:
-    // 设置全局种子（可选）
+    // Set global seed (optional)
     static void set_seed(unsigned int seed) {
         std::lock_guard<std::mutex> lock(seed_mutex);
         global_seed = seed;
     }
 
-    // 获取 [a, b] 范围内的随机整数
-    // 获取 [a, b] 范围内的随机整数
+    // Get random integer in range [a, b]
     static int rand_int(int a, int b) {
         std::uniform_int_distribution<int> distribution(a, b);
         return distribution(get_generator());
@@ -190,7 +189,7 @@ public:
         return distribution(get_generator());
     }
 
-    // 获取 [0.0, 1.0] 范围内的随机百分比（double）
+    // Get random percentage in range [0.0, 1.0] (double)
     static double rand_percent() {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
         return distribution(get_generator());
@@ -205,7 +204,7 @@ public:
         return generator;
     }
 private:
-    static inline unsigned int global_seed = 42; // 默认种子
+    static inline unsigned int global_seed = 42; // Default seed
     static inline std::mutex seed_mutex;
 };
 

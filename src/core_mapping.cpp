@@ -896,7 +896,7 @@ void EyerissInst::print_loop_nest(const ConvWl& wl, std::ostream& os) const {
 	len_t C1 = MIN(Ct, max_c1);
 	len_t K1 = MIN(Kt, max_k1);
 	
-	os << "\n[Eyeriss 最优循环映射方案]" << std::endl;
+	os << "\n[Optimal Eyeriss Loop Mapping]" << std::endl;
 	os << "for (k2 = 0; k2 < " << DIVCEIL(Kt, K1) << "; k2++)" << std::endl;
 	os << "  for (c2 = 0; c2 < " << DIVCEIL(Ct, C1) << "; c2++)" << std::endl;
 	os << "    for (n = 0; n < " << Bt << "; n++)" << std::endl;
@@ -904,23 +904,23 @@ void EyerissInst::print_loop_nest(const ConvWl& wl, std::ostream& os) const {
 	os << "        for (k1 = 0; k1 < " << K1 << "; k1++)" << std::endl;
 	os << "          for (c1 = 0; c1 < " << C1 << "; c1++)" << std::endl;
 	os << "            for (s = 0; s < " << wl.S << "; s++)" << std::endl;
-	os << "\n[硬件资源分配]" << std::endl;
-	os << "PE 阵列: " << core->pes.Yarray << " × " << core->pes.Xarray << std::endl;
-	os << "复制因子:" << std::endl;
-	os << "  K 维度: " << k_reply << std::endl;
-	os << "  B 维度: " << b_reply << std::endl;
-	os << "折叠因子:" << std::endl;
-	os << "  W 维度: " << DIVCEIL(wl.H, core->pes.Xarray) << std::endl;
+	os << "\n[Hardware Resource Allocation]" << std::endl;
+	os << "PE Array: " << core->pes.Yarray << " x " << core->pes.Xarray << std::endl;
+	os << "Replication Factor:" << std::endl;
+	os << "  K Dimension: " << k_reply << std::endl;
+	os << "  B Dimension: " << b_reply << std::endl;
+	os << "Folding Factor:" << std::endl;
+	os << "  W Dimension: " << DIVCEIL(wl.H, core->pes.Xarray) << std::endl;
 
-	os << "\n[性能指标]" << std::endl;
-	os << "总能耗: " << best_map.cost.energy << std::endl;
-	os << "  - UBUF能耗: " << best_map.ubuf << std::endl;
-	os << "  - Buffer能耗: " << best_map.buffer << std::endl;
-	os << "  - NoC能耗: " << best_map.noc << std::endl;
-	os << "  - MAC能耗: " << best_map.mac << std::endl;
-	os << "执行周期: " << best_map.cost.time << std::endl;
-	os << "PE利用率: " << best_map.util * 100 << "%" << std::endl;
-	os << "总体利用率: " << best_map.tot_util * 100 << "%" << std::endl;
+	os << "\n[Performance Metrics]" << std::endl;
+	os << "Total Energy: " << best_map.cost.energy << std::endl;
+	os << "  - UBUF Energy: " << best_map.ubuf << std::endl;
+	os << "  - Buffer Energy: " << best_map.buffer << std::endl;
+	os << "  - NoC Energy: " << best_map.noc << std::endl;
+	os << "  - MAC Energy: " << best_map.mac << std::endl;
+	os << "Execution Cycles: " << best_map.cost.time << std::endl;
+	os << "PE Utilization: " << best_map.util * 100 << "%" << std::endl;
+	os << "Overall Utilization: " << best_map.tot_util * 100 << "%" << std::endl;
 }
 
 void EyerissInst::getCost(const CoreMapper::ConvWl& wl) {

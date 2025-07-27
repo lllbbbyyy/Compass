@@ -5,7 +5,6 @@ using namespace std;
 int main()
 {
 
-    // 第二步：用 rapidcsv 打开并写入
     rapidcsv::Document doc;
 	doc.SetColumnName(0,"latency");
 	doc.SetColumnName(1,"energy");

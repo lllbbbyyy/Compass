@@ -12,12 +12,10 @@
 #include "core_mapping.h"
 
 // ------------------------------------------------------------------
-// 全局常量（header 中保留即可，使用 C++17 的 inline constexpr 避免 ODR 冲突）
 inline constexpr int pex_num = 4;
 inline constexpr int pey_num = 4;
 
 // ------------------------------------------------------------------
-// 函数声明
 std::vector<double> buffer_energy_table(int width, vol_t size);
 
 std::pair<int, int> closest_factors(int n);

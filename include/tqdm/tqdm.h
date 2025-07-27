@@ -13,7 +13,7 @@
 
 class tqdm {
 public:
-    /*------------- 通常用法：tqdm(N) -------------*/
+    /*------------- Common usage: tqdm(N) -------------*/
     explicit tqdm(std::size_t total,
                 std::string prefix = "",
                   std::size_t bar_width   = 50,
@@ -25,7 +25,7 @@ public:
           min_update_(min_update),
           start_(clock::now()) {}
 
-    /*------- 直接包裹任何具有 begin/end 的可迭代对象 -------*/
+    /*------- Directly wrap any iterable object with begin/end -------*/
     template <class Range,
               class = decltype(std::begin(std::declval<const Range&>())),
               class = decltype(std::end  (std::declval<const Range&>()))>
@@ -38,7 +38,7 @@ public:
                                                       std::end(r))),std::move(prefix),
                bar_width, min_update) {}
 
-    /*----------------- 迭代器封装 -----------------*/
+    /*----------------- Iterator wrapper -----------------*/
     template <class UnderlyingIt>
     class iterator {
         using value_category_tag =
@@ -68,7 +68,7 @@ public:
         UnderlyingIt it_;
     };
 
-    /*------------ 针对 `for(int i : tqdm(N))` 的 begin/end ------------*/
+    /*------------ begin/end for `for(int i : tqdm(N))` ------------*/
     class int_iterator {
     public:
         using iterator_category = std::input_iterator_tag;
@@ -91,12 +91,12 @@ public:
         std::size_t v_;
     };
 
-    /*---------------- begin / end 双接口 ----------------*/
-    /* 整数迭代 */
+    /*---------------- begin / end dual interface ----------------*/
+    /* Integer iteration */
     int_iterator begin() { return int_iterator(this, 0); }
     int_iterator end()   { return int_iterator(this, total_); }
 
-    /* 泛型迭代：推导出底层迭代器类型 */
+    /* Generic iteration: deduce underlying iterator type */
     template <class Range>
     auto wrap(Range& r) {
         using std::begin; using std::end;
@@ -104,7 +104,7 @@ public:
             iterator(begin(r)), iterator(end(r)));
     }
 
-    /*------------- 主动手动更新 API --------------*/
+    /*------------- Active manual update API --------------*/
     void tick(std::size_t n = 1) {
         current_ += n;
         auto now = clock::now();
@@ -112,7 +112,7 @@ public:
             render(now);
     }
 
-    ~tqdm() {  /* 确保最后 100% 刷新并换行 */
+    ~tqdm() {  /* Ensure final 100% refresh and newline */
         render(clock::now(), true);
         std::cout << '\n';
     }
@@ -128,7 +128,7 @@ private:
     std::size_t current_ = 0;
     std::size_t last_units_drawn_ = 0;
 
-    /*----------- 格式化时间：hh:mm:ss -----------*/
+    /*----------- Format time: hh:mm:ss -----------*/
     static std::string pretty_time(std::chrono::seconds s) {
         auto h = std::chrono::duration_cast<std::chrono::hours>(s);
         s -= std::chrono::duration_cast<std::chrono::seconds>(h);
@@ -145,23 +145,23 @@ private:
         float   progress = total_ ? float(current_) / total_ : 1.0f;
         std::size_t units_to_draw = static_cast<std::size_t>(std::round(progress * bar_width_));
 
-        /* 若条长度无变化且非强制刷新，则跳过（减少闪烁）*/
+        /* Skip if bar length unchanged and not forced (reduce flicker) */
         if (!force && units_to_draw == last_units_drawn_) return;
         last_units_drawn_ = units_to_draw;
         last_render_ = now;
 
-        /* ETA / 速率计算 */
+        /* ETA / rate calculation */
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_);
         double rate = elapsed.count() ? current_ / double(elapsed.count()) : 0.0;
         double sec_left = rate ? (total_ - current_) / rate : 0.0;
         auto   eta      = std::chrono::seconds( static_cast<long long>(std::llround(sec_left)) );
 
-        /* 组装字符串 */
+        /* Assemble string */
         std::ostringstream os;
-        os << "\33[2K\r";
+        os << "\33[2K\r";   // ← Erase line and return to start
         if (!prefix_.empty())
             os << prefix_ << " ";
-        os << "[";   // ← 擦除整行并回到行首
+        os << "[";
         for (std::size_t i = 0; i < bar_width_; ++i)
             os << (i < units_to_draw ? '=' : (i == units_to_draw ? '>' : ' '));
         os << "] "

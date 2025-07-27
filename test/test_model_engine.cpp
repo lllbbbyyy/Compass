@@ -49,7 +49,7 @@ shared_ptr<NoC> createNoC(mlen_t xlen,mlen_t ylen,int dram_num=2){
     std::vector<bw_t> dram_bws(dram_num,DRAM_bw_each);
     std::vector<pos_t> dram_router_list;
     std::vector<std::vector<pos_t>> dram_list;
-    // 共有2*ylen个dram router，每侧有dram_num/2个dram，每个dram分ylen/(dram_num/2)个dram 端口
+    // total 2*ylen dram router，every side has dram_num/2 dram，every dram has ylen/(dram_num/2) dram router
     // Sets DRAM router
     size_t router_num_per_dram=ylen/(dram_num/2);
     std::vector<pos_t> routers;

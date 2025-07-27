@@ -15,7 +15,6 @@
 
 class Req {
 public:
-    // 定义请求类型枚举
     enum class Type {
         Prefill,
         Decode,

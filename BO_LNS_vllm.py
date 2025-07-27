@@ -374,81 +374,81 @@ class LNSOptimizer:
         
         solution[self.type_vars[idx]] = new_type
         
-        return f"类型变更: 芯粒{idx}从{'NVDLA' if current_type==0 else 'Eyeriss'}切换为{'Eyeriss' if new_type==1 else 'NVDLA'}"
+        return f"Type Change: Chiplet {idx} switched from {'NVDLA' if current_type==0 else 'Eyeriss'} to {'Eyeriss' if new_type==1 else 'NVDLA'}"
 
     def apply_buffer_adjust(self, solution):
-        """存储调整算子：随机选择一个芯粒变更其存储大小"""
-        # 随机选择一个芯粒
+        """Buffer adjustment operator: randomly select a chiplet to change its buffer size"""
+        # Randomly select a chiplet
         idx = random.randint(0, self.num_chiplets - 1)
         
-        # 获取当前存储大小
+        # Get current buffer size
         current_buffer = solution[self.buffer_vars[idx]]
         
-        # 随机选择新的存储大小（从预定义列表中）
-        new_buffer = GRANULARITY*random.randint(1, max(buffer_size_list)//GRANULARITY)  # 确保是GRANULARITY的倍数
+        # Randomly select new buffer size (from predefined list)
+        new_buffer = GRANULARITY*random.randint(1, max(buffer_size_list)//GRANULARITY)  # Ensure it's multiple of GRANULARITY
         
-        # 应用变更
+        # Apply change
         solution[self.buffer_vars[idx]] = new_buffer
         
-        # 返回操作信息
-        return f"存储调整: 芯粒{idx}从{current_buffer}KB改为{new_buffer}KB"
+        # Return operation info
+        return f"Buffer Adjustment: Chiplet {idx} changed from {current_buffer}KB to {new_buffer}KB"
 
     def apply_compute_adjust(self, solution):
-        """计算单元调整算子：随机选择30%的芯粒重新分配计算资源"""
-        # 确定要调整的芯粒数量 (至少1个)
+        """Compute unit adjustment operator: randomly select 30% of chiplets to reallocate compute resources"""
+        # Determine number of chiplets to adjust (at least 1)
         num_to_adjust = max(2, int(self.num_chiplets * 0.3))
         
-        # 随机选择芯粒
+        # Randomly select chiplets
         chiplet_indices = random.sample(range(self.num_chiplets), num_to_adjust)
         
-        # 计算当前总计算单元
+        # Calculate current total compute units
         total_compute = sum(solution[self.compute_vars[i]] for i in chiplet_indices)
         
-        # 重新分配计算单元
+        # Reallocate compute units
         new_allocations = self.redistribute_compute(total_compute, num_to_adjust)
         
-        # 应用新分配
+        # Apply new allocations
         for i, compute_val in zip(chiplet_indices, new_allocations):
             solution[self.compute_vars[i]] = compute_val
         
-        # 返回操作信息
+        # Return operation info
         chiplet_str = ",".join(map(str, chiplet_indices))
         allocations_str = ",".join(map(str, new_allocations))
-        return f"计算调整: {num_to_adjust}个芯粒[{chiplet_str}] 新分配: [{allocations_str}]"
+        return f"Compute Adjustment: {num_to_adjust} chiplets [{chiplet_str}] new allocation: [{allocations_str}]"
 
     def redistribute_compute(self, total_compute, num_chiplets):
-        """重新分配计算资源给指定的芯粒"""
-        # 确保分配是粒度的倍数
+        """Redistribute compute resources to specified chiplets"""
+        # Ensure allocation is multiple of granularity
         total_compute = (total_compute // self.granularity) * self.granularity
         
-        # 创建初始分配（平均分配）
+        # Create initial allocation (average distribution)
         base_alloc = total_compute // num_chiplets
-        # 确保基本分配是粒度的倍数
+        # Ensure base allocation is multiple of granularity
         base_alloc = (base_alloc // self.granularity) * self.granularity
         
         allocations = [base_alloc] * num_chiplets
         
-        # 分配余数
+        # Allocate remainder
         remainder = total_compute - base_alloc * num_chiplets
         for i in range(remainder // self.granularity):
             allocations[i] += self.granularity
         
-        # 随机扰动（在芯粒间转移计算资源）
-        for _ in range(3):  # 进行3次随机转移
+        # Random perturbation (transfer compute resources between chiplets)
+        for _ in range(3):  # Perform 3 random transfers
             if num_chiplets < 2:
                 break
                 
-            # 随机选择两个不同的芯粒
+            # Randomly select two different chiplets
             i, j = random.sample(range(num_chiplets), 2)
             
-            # 计算可以转移的最大值
+            # Calculate maximum transferable value
             max_transfer = min(
-                allocations[i] - self.granularity,  # 发送方至少保留GRANULARITY
-                (self.total_compute // num_chiplets) - allocations[j]  # 接收方不超过上限
+                allocations[i] - self.granularity,  # Sender keeps at least GRANULARITY
+                (self.total_compute // num_chiplets) - allocations[j]  # Receiver doesn't exceed limit
             )
             
             if max_transfer >= self.granularity:
-                # 随机转移一定量（GRANULARITY的倍数）
+                # Randomly transfer a certain amount (multiple of GRANULARITY)
                 transfer_units = random.randint(1, max_transfer // self.granularity) * self.granularity
                 allocations[i] -= transfer_units
                 allocations[j] += transfer_units
@@ -456,20 +456,20 @@ class LNSOptimizer:
         return allocations
 
     def solution_to_config(self, solution):
-        """将解字典转换为配置字典"""
+        """Convert solution dictionary to configuration dictionary"""
         config = copy.deepcopy(self.base_config)
         config["chiplets"] = []
         
         for i in range(self.num_chiplets):
-            # 获取变量值
+            # Get variable values
             type_val = solution[self.type_vars[i]]
             buffer_val = solution[self.buffer_vars[i]]
             compute_val = solution[self.compute_vars[i]]
             
-            # 转换为配置
+            # Convert to configuration
             chiplet_type = "NVDLA" if type_val == 0 else "Eyeriss"
             
-            # 确保值在合理范围内
+            # Ensure values are within reasonable range
             buffer_val = max(min(buffer_val, max(buffer_size_list)), min(buffer_size_list))
             compute_val = max(self.granularity, min(compute_val, self.total_compute))
             
@@ -481,9 +481,9 @@ class LNSOptimizer:
         
         return config
 
-# ======================= 结果输出 =======================
+# ======================= Result Output =======================
 def save_best_config(config, directory, config_type="hetero_finetune"):
-    """保存最优配置到文件"""
+    """Save best configuration to file"""
     config_json = {
         "num_chiplets": config["num_chiplets"],
         "nop_bw": config["nop_bw"],
@@ -492,68 +492,68 @@ def save_best_config(config, directory, config_type="hetero_finetune"):
         "chiplets": config["chiplets"]
     }
     
-    # 输出配置信息
-    print("\n=== 最优配置（解码后） ===")
-    print(f"芯粒数量: {config['num_chiplets']}")
-    print(f"NoP 带宽: {config['nop_bw']} bits")
-    print(f"DRAM 带宽: {config['dram_bw']} GB/s")
+    # Output configuration information
+    print("\n=== Best Configuration (After Decoding) ===")
+    print(f"Number of Chiplets: {config['num_chiplets']}")
+    print(f"NoP Bandwidth: {config['nop_bw']} GB/s")
+    print(f"DRAM Bandwidth: {config['dram_bw']} GB/s")
     print(f"Micro-Batch Size: {config['micro_batch']}")
     
-    print(f"\n芯粒配置:")
+    print(f"\nChiplet Configuration:")
     for i, chiplet in enumerate(config["chiplets"]):
-        print(f"  Chiplet {i}: 类型={chiplet['type']}, 缓冲区={chiplet['buffer_size']}KB, 计算单元={chiplet['compute_units']}")
+        print(f"  Chiplet {i}: Type={chiplet['type']}, Buffer={chiplet['buffer_size']}KB, Compute Units={chiplet['compute_units']}")
     
-    # 保存到文件
+    # Save to file
     with open(directory / f"best_{config_type}_hardware.json", "w") as f:
         json.dump(config_json, f, indent=2)
     
     return config_json
 
-# ======================= 主优化流程 =======================
+# ======================= Main Optimization Process =======================
 def main():
     global first_flag
-    # 阶段1: 同构全局优化
+    # Phase 1: Homogeneous Global Optimization
     print("="*50)
-    print("开始同构全局优化阶段...")
+    print("Starting Homogeneous Global Optimization Phase...")
     print("="*50)
     
-    # 同构优化
+    # Homogeneous optimization
     homo_space = build_homo_space()
     trials_path = homo_directory / 'homo_trials.pkl'
     
-    # 加载已有的trials或创建新的
+    # Load existing trials or create new ones
     if trials_path.exists():
         with open(trials_path, "rb") as f:
             homo_trials = pickle.load(f)
-        print(f"加载已有的 {len(homo_trials.trials)} 个试验点")
+        print(f"Loaded {len(homo_trials.trials)} existing trial points")
     else:
         homo_trials = Trials()
     
-    # 设置早停参数
+    # Set early stopping parameters
     patience = early_stop_tries
     no_improve_count = 0
     best_loss = float('inf')
     
     start_time = time.time()
-    # 如果有已有结果，设置初始最优值
+    # If there are existing results, set initial optimal value
     if any(trial['result']['status'] == STATUS_OK for trial in homo_trials.trials):
         best_loss = homo_trials.best_trial['result']['loss']
-        print(f"已有最佳损失: {best_loss}")
+        print(f"Existing best loss: {best_loss}")
     else:
-        print("没有成功的试验记录")
+        print("No successful trial records")
     
-        # 创建目标函数
+        # Create objective function
         homo_objective = create_homo_objective(homo_directory)
         homo_algo = partial(tpe.suggest, gamma=0.5, n_startup_jobs=init_rounds)
         
-        # 增量式优化循环
+        # Incremental optimization loop
         eval_count = 0
         max_evals = homo_max_rounds
         
         while eval_count < max_evals:
             eval_count += 1
             
-            # 运行一次评估
+            # Run one evaluation
             fmin(
                 fn=homo_objective, 
                 space=homo_space, 
@@ -563,36 +563,36 @@ def main():
                 trials=homo_trials
             )
             
-            # 获取当前最佳损失
+            # Get current best loss
             current_loss = homo_trials.best_trial['result']['loss']
             
-            # 检查是否有改进
+            # Check for improvement
             if current_loss < best_loss - 1e-4:
                 improvement = best_loss - current_loss
                 best_loss = current_loss
                 no_improve_count = 0
-                print(f"评估 {eval_count}: 发现改进! 新损失: {current_loss:.6f} (改进: {improvement:.6f})")
+                print(f"Evaluation {eval_count}: Improvement found! New loss: {current_loss:.6f} (Improvement: {improvement:.6f})")
             else:
                 no_improve_count += 1
-                print(f"评估 {eval_count}: 无改进 ({no_improve_count}/{patience}), 当前最佳: {best_loss:.6f}")
+                print(f"Evaluation {eval_count}: No improvement ({no_improve_count}/{patience}), Current best: {best_loss:.6f}")
             
-            # 保存当前状态
+            # Save current state
             with open(trials_path, "wb") as f:
                 pickle.dump(homo_trials, f)
             
-            # 检查早停条件
+            # Check early stopping condition
             if no_improve_count >= patience:
-                print(f"连续 {patience} 次无改进，停止优化")
+                print(f"No improvement for {patience} consecutive times, stopping optimization")
                 break
         
-    # 报告优化结果
+    # Report optimization results
     optimization_time = time.time() - start_time
-    print(f"\n同构优化完成! 总评估次数: {len(homo_trials.trials)}")
-    print(f"优化耗时: {optimization_time:.2f}秒")
+    print(f"\nHomogeneous optimization completed! Total evaluations: {len(homo_trials.trials)}")
+    print(f"Optimization time: {optimization_time:.2f} seconds")
     homo_best_cost = best_loss
-    print(f"最优成本: {homo_best_cost:.6f}")
+    print(f"Best cost: {homo_best_cost:.6f}")
     
-    # 解析同构最优配置
+    # Parse homogeneous optimal configuration
     from hyperopt import space_eval
     best_params = space_eval(homo_space, homo_trials.argmin)
     
@@ -604,7 +604,7 @@ def main():
         "chiplets": []
     }
     
-    # 为每个芯粒添加统一配置
+    # Add uniform configuration for each chiplet
     chiplet_type = chiplet_type_list[best_params['chiplet_type']]
     buffer = buffer_size_list[best_params['buffer']]
     compute = calculate_compute_units(homo_config["num_chiplets"])
@@ -616,19 +616,19 @@ def main():
             "compute_units": compute
         })
     
-    # 输出同构最优配置
+    # Output homogeneous optimal configuration
     save_best_config(homo_config, homo_directory, "homo")
     
     first_flag = True
-    # 阶段2: 异构微调 (使用OR-Tools LNS)
+    # Phase 2: Heterogeneous Fine-tuning (using OR-Tools LNS)
     print("\n" + "="*50)
-    print("开始异构微调阶段 (使用OR-Tools LNS)...")
+    print("Starting Heterogeneous Fine-tuning Phase (using OR-Tools LNS)...")
     print("="*50)
-    print(f"固定全局参数: 芯粒数量={homo_config['num_chiplets']}, NoP带宽={homo_config['nop_bw']}, "
-          f"DRAM带宽={homo_config['dram_bw']}, Micro-Batch={homo_config['micro_batch']}")
-    print(f"同构最优成本: {homo_best_cost:.6f}")
+    print(f"Fixed global parameters: Number of Chiplets={homo_config['num_chiplets']}, NoP Bandwidth={homo_config['nop_bw']}, "
+          f"DRAM Bandwidth={homo_config['dram_bw']}, Micro-Batch={homo_config['micro_batch']}")
+    print(f"Homogeneous optimal cost: {homo_best_cost:.6f}")
     
-    # 使用LNS进行异构微调
+    # Use LNS for heterogeneous fine-tuning
     lns_optimizer = LNSOptimizer(
         homo_config,
         homo_best_cost,
@@ -638,22 +638,22 @@ def main():
     
     hetero_best_cost, hetero_best_config, hetero_normalized_cost = lns_optimizer.optimize()
     
-    # 输出异构最优配置
+    # Output heterogeneous optimal configuration
     save_best_config(hetero_best_config, hetero_directory, "hetero")
     
-    # 评估最终配置
+    # Evaluate final configuration
     print("\n" + "="*50)
-    print(f"异构微调完成!")
-    print(f"同构最优成本: {homo_best_cost:.6f}")
-    print(f"异构最优成本: {hetero_best_cost:.6f}")
-    print(f"归一化成本: {hetero_normalized_cost:.6f}")
+    print(f"Heterogeneous fine-tuning completed!")
+    print(f"Homogeneous optimal cost: {homo_best_cost:.6f}")
+    print(f"Heterogeneous optimal cost: {hetero_best_cost:.6f}")
+    print(f"Normalized cost: {hetero_normalized_cost:.6f}")
     
     improvement = homo_best_cost - hetero_best_cost
     if hetero_best_cost < homo_best_cost:
         improvement_percentage = (homo_best_cost - hetero_best_cost) / homo_best_cost * 100
-        print(f"改进: {improvement:.6f} ({improvement_percentage:.2f}%)")
+        print(f"Improvement: {improvement:.6f} ({improvement_percentage:.2f}%)")
     else:
-        print(f"未改进: 异构成本比同构高 {improvement:.6f}")
+        print(f"No improvement: Heterogeneous cost is higher than homogeneous by {improvement:.6f}")
     
     print("="*50)
 

@@ -4,7 +4,7 @@
 #include <cassert>
 
 // ------------------------------------------------------------
-// buffer_energy_table 具体实现
+// buffer_energy_table implementation
 std::vector<double> buffer_energy_table(int width, vol_t size) {
     std::vector<double> access(2);       // [0] = read, [1] = write
     vol_t size_;
@@ -52,7 +52,7 @@ std::vector<double> buffer_energy_table(int width, vol_t size) {
 }
 
 // ------------------------------------------------------------
-// 其它函数实现
+// Other function implementations
 std::pair<int, int> closest_factors(int n) {
     int sqrt_n = static_cast<int>(std::sqrt(n));
     for (int i = sqrt_n; i >= 1; --i) {
@@ -60,7 +60,7 @@ std::pair<int, int> closest_factors(int n) {
             return {i, n / i};  // i ≤ n/i
         }
     }
-    return {1, n};  // fallback（理论上不会走到这里）
+    return {1, n};  // fallback (theoretically should not reach here)
 }
 
 std::shared_ptr<EyerissMapper>
@@ -164,7 +164,7 @@ createNoC(mlen_t xlen, mlen_t ylen,
     assert(left_router_num_per_dram > 0||right_router_num_per_dram);
     std::vector<pos_t> routers;
 
-    // 左侧 DRAM
+    // left DRAM
     if(left_router_num_per_dram>0){
         for (mlen_t y = 0; y < ylen; ++y) {
             dram_router_list.push_back({0, y});
@@ -181,7 +181,7 @@ createNoC(mlen_t xlen, mlen_t ylen,
         }
     }
 
-    // 右侧 DRAM
+    // right DRAM
     if(right_router_num_per_dram>0){
         for (mlen_t y = 0; y < ylen; ++y) {
             dram_router_list.push_back({static_cast<mlen_t>(xlen - 1), y});
@@ -214,11 +214,11 @@ random_mapping(size_t BATCH_SIZE,
     std::vector<int> segmentation;
     std::vector<std::vector<cidx_t>> layerToChip;
 
-    // 随机分段
+    // Random segmentation
     for (size_t i = 0; i < LAYER_NUM - 1; ++i)
         segmentation.push_back(ThreadSafeRandom::rand_int(0,1));
 
-    // 随机 layer→chiplet 映射
+    // Random layer to chiplet mapping
     for (size_t j = 0; j < BATCH_SIZE; ++j) {
         layerToChip.emplace_back();
         for (size_t i = 0; i < LAYER_NUM; ++i)

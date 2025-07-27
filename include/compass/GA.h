@@ -12,7 +12,7 @@
 #include <thread>
 #include <mutex>
 
-// 个体结构
+// Individual structure
 struct Individual
 {
     std::vector<int> segmentation;
@@ -30,8 +30,6 @@ struct Individual
 class GA
 {
 private:
-
-
     int current_generation = 1;
 
     int BATCH_SIZE;
@@ -40,23 +38,23 @@ private:
 
     std::vector<Individual> population;
     std::vector<Individual> new_population;
-    std::mutex mtx; // 用于保护共享资源
+    std::mutex mtx; // For protecting shared resources
 
     std::vector<std::vector<std::unique_ptr<CompassModelEngine>>> engines;
 
     unsigned int thread_num;
 
 public:
-    // 静态成员变量
-    static int pop_size;    // 种群大小
-    static int generations; // 代数
+    // Static member variables
+    static int pop_size;    // Population size
+    static int generations; // Number of generations
 
     Individual best_solution;
     double best_fitness = -1e9;
     std::vector<cycle_t> process_latency;
     std::vector<energy_t> process_energy;
 
-    // 构造函数
+    // Constructor
     GA(const std::vector<std::vector<std::shared_ptr<Network>>> &_batchedModels, const std::vector<std::shared_ptr<CoreMapper>> &_coreMappers, std::shared_ptr<NoC> _noc)
     {
         BATCH_SIZE = _batchedModels[0].size();
@@ -81,21 +79,21 @@ public:
         }
     }
 
-    // 适应度评估并行化
+    // Parallel fitness evaluation
     void evaluate_population_parallel(std::vector<Individual> &pop);
 
-    // 初始化种群
+    // Initialize population
     void initialize_population();
 
     void update_best_solution(std::vector<Individual> &population);
 
-    // 交叉操作
+    // Crossover operation
     Individual crossover(const Individual &p1, const Individual &p2);
 
-    // 变异操作
+    // Mutation operation
     void mutate(Individual &ind);
 
-    // 主循环
+    // Main loop
     void run();
 
     void random_run();
@@ -113,18 +111,17 @@ public:
     void save_progress(const std::string &filename);
 
 private:
-    // 适应度评估
+    // Fitness evaluation
     void evaluate_individual(int parallel_i, Individual &ind);
 
-    // 交叉和变异的并行处理
+    // Parallel processing of crossover and mutation
     void crossover_and_mutate_parallel();
 
     void crossover_and_mutate(size_t i);
-    // void mutate_micro_batch_size(int &micro_batch_size);
     void mutate_segmentation(std::vector<int> &segmentation);
     void mutate_mapping(const std::vector<int> &segmentation, std::vector<std::vector<int>> &mapping);
 
-    // 锦标赛选择操作
+    // Tournament selection operation
     Individual tournament_selection();
 };
 

@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	std::string input_filename = argv[2];
 	std::string output_filename = argv[3];
 
-	// 2. 打开文件
+	// 2. open file
 	std::ifstream configFile(config_filename);
 	if (!configFile.is_open())
 	{
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
 	int seed=config_j["seed"];
 	ThreadSafeRandom::set_seed(seed);
 
-	// 2. 打开文件
+	// 2. open file
 	std::ifstream inFile(input_filename);
 	if (!inFile.is_open())
 	{

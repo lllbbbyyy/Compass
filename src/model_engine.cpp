@@ -200,7 +200,7 @@ mc_t CompassModelEngine::calcMonetaryCost() {
     
     //128GB/s has 3mm2 area
 	double PCIe_area = 3 mm2 * noc->DRAM_total_bw / 128;
-    // *2指的是两边
+    // *2 refer to 2 side
 	double IO_die_area = noc->DRAM_total_bw / 44.0 * (DDR_PHY_den+DDR_ctrl_den)+ PCIe_area+(NoP_len*NoP_wid* noc->NoC_bw / 4 *noc->ylen*2);//neglect other IOs
 
 	IO_die_area *= (control_unit_prop * DFT_prop);

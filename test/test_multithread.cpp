@@ -28,7 +28,7 @@ private:
 
     std::atomic<bool> stop;
     std::atomic<int> idleThreads;
-    const int maxThreads = std::thread::hardware_concurrency(); // 可扩展上限
+    const int maxThreads = std::thread::hardware_concurrency();
 };
 
 AutoScalingThreadPool::AutoScalingThreadPool() : stop(false), idleThreads(0) {}
@@ -47,7 +47,6 @@ void AutoScalingThreadPool::worker() {
         {
             std::unique_lock<std::mutex> lock(queueMutex);
             if (!condition.wait_for(lock, std::chrono::seconds(2), [this]() { return stop || !tasks.empty(); })) {
-                // 超时未获取任务 → 退出线程
                 return;
             }
 
@@ -80,7 +79,6 @@ auto AutoScalingThreadPool::enqueue(F&& f, Args&&... args)
 
     condition.notify_one();
 
-    // 动态创建线程（如果没有空闲线程，且未超最大线程数）
     if (idleThreads <= 0 && threads.size() < maxThreads) {
         threads.emplace_back([this]() { this->worker(); });
         idleThreads++;

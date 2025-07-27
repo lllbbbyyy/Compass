@@ -42,8 +42,8 @@ pipeline_mapping(size_t BATCH_SIZE,
     return {segmentation, layerToChip};
 }
 
-int GA::pop_size = 250;    // 种群大小
-int GA::generations = 300; // 代数
+int GA::pop_size = 250;   
+int GA::generations = 300; 
 
 void GA::initialize_population()
 {
@@ -54,7 +54,7 @@ void GA::initialize_population()
         auto [seg, laytochip] = random_mapping(BATCH_SIZE, LAYER_NUM, CHIPLET_NUM);
         population[i] = Individual(seg, laytochip);
     }
-    evaluate_population_parallel(population); // 评估初始种群
+    evaluate_population_parallel(population); 
 }
 
 void GA::evaluate_population_parallel(std::vector<Individual> &pop)
@@ -137,10 +137,10 @@ void GA::mutate(Individual &ind)
 
 void GA::mutate_segmentation(std::vector<int> &seg)
 {
-    const int flip_prob = 5;   // 位翻转概率
-    const int shift_prob = 10; // 段移动概率
+    const int flip_prob = 5;   // Bit flip probability
+    const int shift_prob = 10; // Segment shift probability
 
-    // 位翻转：插入或删除断点
+    // Bit flip: insert or delete breakpoint
     for (size_t i = 0; i < seg.size(); ++i)
     {
         if (ThreadSafeRandom::rand_int(0, 99) < flip_prob)
@@ -149,7 +149,7 @@ void GA::mutate_segmentation(std::vector<int> &seg)
         }
     }
 
-    // 段移动：左移或右移现有断点
+    // Segment shift: move existing breakpoint left or right
     for (size_t i = 0; i < seg.size(); ++i)
     {
         if (seg[i] == 1 && ThreadSafeRandom::rand_int(0, 99) < shift_prob)
@@ -173,20 +173,20 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
 {
     double progress = static_cast<double>(current_generation) / generations;
 
-    // 概率：从小到大扰动程度排序
-    // ① 替换 mapping[b][l] 为新芯粒（确保空间可遍历）
+    // Probability: sorted by disturbance level from small to large
+    // ① Replace mapping[b][l] with new chiplet (ensure space traversability)
     int PROB_RANDOM_REPLACEMENT;
-    // ② 相邻 layer 交换
+    // ② Swap adjacent layers
     int PROB_SWAP_ADJACENT_LAYERS;
-    // ③ 同层 batch 交换
+    // ③ Swap batches on same layer
     int PROB_SWAP_BATCHES_ON_LAYER;
-    // ④ segment 内随机重排
+    // ④ Random reordering within segment
     int PROB_SHUFFLE_SEGMENT;
-    // ⑤ segment 重映射
+    // ⑤ Segment remapping
     int PROB_REMAPPING_SEGMENT;
-    // ⑥ 交换两个 segment
+    // ⑥ Swap two segments
     int PROB_SWAP_SEGMENTS;
-    // ⑦ 交换两个 batch
+    // ⑦ Swap two batches
     int PROB_SWAP_BATCHES;
 
     if (progress < 0.3)
@@ -220,21 +220,21 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
         PROB_SWAP_BATCHES = 2;
     }
 
-    // ① 替换 mapping[b][l] 为新芯粒
+    // ① replace mapping[b][l] to new chiplet
     if (ThreadSafeRandom::rand_int(0, 99) < PROB_RANDOM_REPLACEMENT){
         auto b=ThreadSafeRandom::rand_int(0, BATCH_SIZE-1);
         auto l=ThreadSafeRandom::rand_int(0, LAYER_NUM-1);
         mapping[b][l] = ThreadSafeRandom::rand_int(0, CHIPLET_NUM - 1);
     }
 
-    // ② 相邻 layer 交换
+    // ② swap layer
     if (ThreadSafeRandom::rand_int(0, 99) < PROB_SWAP_ADJACENT_LAYERS && LAYER_NUM > 1){
         auto b=ThreadSafeRandom::rand_int(0, BATCH_SIZE-1);
         auto l=ThreadSafeRandom::rand_int(0, LAYER_NUM-2);
         std::swap(mapping[b][l], mapping[b][l + 1]);
     }
 
-    // ③ 同一层跨 batch 交换
+    // ③ swap across batch
     if (ThreadSafeRandom::rand_int(0, 99) < PROB_SWAP_BATCHES_ON_LAYER)
     {
         auto l= ThreadSafeRandom::rand_int(0, LAYER_NUM - 1);
@@ -245,7 +245,7 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
     }
 
 
-    // 提取 segments
+    // get segments
     std::vector<std::pair<int, int>> segments;
     int start = 0;
     for (size_t i = 0; i < segmentation.size(); ++i)
@@ -258,7 +258,7 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
     }
     segments.emplace_back(start, LAYER_NUM);
 
-    // ④ segment 内随机重排
+    // ④ segment sfuffle
     if (!segments.empty() && ThreadSafeRandom::rand_int(0, 99) < PROB_SHUFFLE_SEGMENT)
     {
         auto seg_index= ThreadSafeRandom::rand_int(0, segments.size() - 1);
@@ -269,7 +269,7 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
         std::copy(temp.begin(), temp.end(), mapping[bb].begin() + a);
     }
 
-    // ⑤ segment 随机重映射
+    // ⑤ segment remapping
     if (!segments.empty() && ThreadSafeRandom::rand_int(0, 99) < PROB_REMAPPING_SEGMENT)
     {
         int s = ThreadSafeRandom::rand_int(0, segments.size() - 1);
@@ -279,7 +279,7 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
             mapping[bb][l] = ThreadSafeRandom::rand_int(0, CHIPLET_NUM - 1);
     }
 
-    // ⑥ 交换两个 segment
+    // ⑥ swap two segment
     if (segments.size() >= 2 && ThreadSafeRandom::rand_int(0, 99) < PROB_SWAP_SEGMENTS)
     {
         int s1 = ThreadSafeRandom::rand_int(0, segments.size() - 1);
@@ -294,7 +294,7 @@ void GA::mutate_mapping(const std::vector<int> &segmentation, std::vector<std::v
                     std::swap(mapping[b][a1 + i], mapping[b][a2 + i]);
         }
     }
-    // ⑦ 交换两个batch
+    // ⑦ swap two batch
     if (BATCH_SIZE >= 2 && ThreadSafeRandom::rand_int(0, 99) < PROB_SWAP_BATCHES)
     {
         int b1 = ThreadSafeRandom::rand_int(0, BATCH_SIZE - 1);
@@ -339,7 +339,7 @@ void GA::crossover_and_mutate(size_t i)
     Individual child = crossover(parent1, parent2);
     mutate(child);
     // std::lock_guard<std::mutex> guard(mtx);
-    new_population[i] = child; // 更新子代个体
+    new_population[i] = child; //
 }
 
 Individual GA::tournament_selection()
@@ -386,9 +386,9 @@ void GA::run()
         // std::cout << "Generation " << gen << " best fitness: " << population[0].fitness << "\n";
         new_population.clear();
         new_population.resize(pop_size);
-        new_population[0] = population[0];            // 保留最好的个体
-        crossover_and_mutate_parallel();              // 并行化交叉和变异
-        evaluate_population_parallel(new_population); // 并行化适应度评估
+        new_population[0] = population[0];            // save best
+        crossover_and_mutate_parallel();              
+        evaluate_population_parallel(new_population); 
         population = new_population;
         update_best_solution(population);
         current_generation++;
@@ -408,7 +408,7 @@ void GA::random_run()
        population[i] = Individual(seg, laytochip);
     }
     std::cout << "init finished" << std::endl;
-    evaluate_population_parallel(population); // 评估初始种群
+    evaluate_population_parallel(population); 
     std::cout << "eva finished" << std::endl;
     best_fitness = -1e9;
     update_best_solution(population);
