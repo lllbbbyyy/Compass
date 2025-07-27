@@ -48,7 +48,7 @@ GRANULARITY = 512  # 所有资源调整的基本单位
 
 chiplet_count_options = [1, 2, 4, 8, 16, 32, 64, 128]
 if len(sys.argv) >= 4 and int(sys.argv[3])==72:
-    chiplet_count_options = [1, 2, 4, 6, 12, 18, 24, 36]
+    chiplet_count_options = [1, 2, 4, 6, 12, 18, 24, 36, 72]
 chiplet_type_list = ["NVDLA", "Eyeriss"]
 buffer_size_list = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]  # 这些值已经是512的倍数
 nop_bw_options = [32, 64, 128, 256] 

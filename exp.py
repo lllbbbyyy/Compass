@@ -114,7 +114,7 @@ for s in scale:
             config['model_info']=scale_model_info[s]
             
             # Save the configuration to a JSON file
-            dir = f"./exp_diff_3/Carch_Cmapping_{w}_{d}_{s}TOPS/"
+            dir = f"./exp_compare/Carch_Cmapping_{w}_{d}_{s}TOPS/"
             print(f"Running experiment with config: {dir}")
             os.makedirs(dir, exist_ok=True)
             filename = f"compass_config_search.json"
@@ -131,9 +131,9 @@ for s in scale:
             with open(dir+filename, 'w') as f:
                 json.dump(config, f, indent=4)
 
-            # with open(dir+'exp_out.log', "w") as outfile:
-            #     subprocess.run(['python3','BO_LNS.py', dir, w, str(s)], 
-            #     check=True, stdout=outfile, stderr=outfile)
+            with open(dir+'exp_out.log', "w") as outfile:
+                subprocess.run(['python3','BO_LNS.py', dir, w, str(s)], 
+                check=True, stdout=outfile, stderr=outfile)
             
             exec_file=dir+'exec.sh'
             search_file=dir+'search.sh'
@@ -145,7 +145,7 @@ for s in scale:
             os.chmod(search_file, st.st_mode | stat.S_IXUSR)
 
             exec_type=['homo','hetero']
-            # exec_type=['homo']
+
             results=[]
             for t in exec_type:
                 with open(dir+f'{t}_phase/exec_out/search_out.log', "w") as outfile:

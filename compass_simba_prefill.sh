@@ -1,1 +1,0 @@
-./build/compass ./config/compass_config_simba_prefill.json ./config/simba_config.json ./res_out/simba_prefill/simba_res.csv

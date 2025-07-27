@@ -49,8 +49,7 @@ config_template={
 
 config = config_template.copy()
 
-# Save the configuration to a JSON file
-dir = f"./exp_chunked_prefill/orca/"
+dir = f"./exp_hybrid_reqs/orca/"
 print(f"Running experiment with config: {dir}")
 os.makedirs(dir, exist_ok=True)
 filename = f"compass_config_search.json"
@@ -58,6 +57,7 @@ with open(dir+filename, 'w') as f:
     json.dump(config, f, indent=4)
 
 with open(dir+'exp_out.log', "w") as outfile:
+    # !!!!please use test_compass_mapping_orca.cpp to generate the exec file first!!!!
     subprocess.run(['python3','BO_LNS.py', dir, 'decode', '2048'], 
     check=True, stdout=outfile, stderr=outfile)
 

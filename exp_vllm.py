@@ -50,7 +50,7 @@ config_template={
 config = config_template.copy()
 
 # Save the configuration to a JSON file
-dir = f"./exp_chunked_prefill/vllm/"
+dir = f"./exp_hybrid_reqs/vllm/"
 print(f"Running experiment with config: {dir}")
 os.makedirs(dir, exist_ok=True)
 filename = f"compass_config_search_decode.json"
@@ -66,6 +66,7 @@ with open(dir+filename, 'w') as f:
     json.dump(config, f, indent=4)
 
 with open(dir+'exp_out.log', "w") as outfile:
+    # !!!!please use test_compass_mapping_vllm.cpp to generate the exec file first!!!!
     subprocess.run(['python3','BO_LNS_vllm.py', dir, 'decode', '2048'], 
     check=True, stdout=outfile, stderr=outfile)
 

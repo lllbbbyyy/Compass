@@ -1,1 +1,0 @@
-./build/compass ./config/compass_config_simba_decode.json ./config/simba_config.json ./res_out/simba_decode/simba_res.csv
