@@ -1,4 +1,4 @@
-# Compass: Mapping and Hardware Exploration of LLM Inference Workloads on Multi-Chiplet Accelerators
+# Compass: Co-Exploration of Mapping and Hardware for Multi-Chiplet Accelerators Targeting LLM Inference Service Workloads
 
 ---
 
