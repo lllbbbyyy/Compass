@@ -88,7 +88,13 @@ int main(int argc, char *argv[])
 	// read config
 	size_t init_chip_number = j["num_chiplets"];
 	int batch_size = config_j["batch_size"];
-	int micro_batch_size = j["micro_batch"];
+	int micro_batch_size = 1;
+	if(config_j.contains("micro_batch")){
+		micro_batch_size = config_j["micro_batch"];
+	}
+	else if(j.contains("micro_batch")){
+		micro_batch_size = j["micro_batch"];
+	}
 
 	auto &chips_info = j["chiplets"];
 	assert(chips_info.size() == init_chip_number);
@@ -110,7 +116,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			assert(0);
+			chips.emplace_back(createPolarCoreMapper(compute_units, buffer_size,chip_type));
 		}
 	}
 
@@ -127,6 +133,7 @@ int main(int argc, char *argv[])
 	ReqGenerator::inputLengthsFile = config_j["req_generator_input_length_path"];
 	ReqGenerator::outputLengthsFile = config_j["req_generator_output_length_path"];
 	int req_number= config_j["req_number"];
+	bool is_chunked_prefill=config_j["is_chunked_prefill"];
 	ReqGenerator generator(batch_size);
 	vector<vector<shared_ptr<Network>>> batched_models(req_number);
 
@@ -136,6 +143,10 @@ int main(int argc, char *argv[])
 
 	auto model_info = config_j["model_info"];
 	string model_type = model_info["type"];
+	int chunked_size= 1;
+	if(is_chunked_prefill){
+		chunked_size=generator.getNextInputLength()/req_number;
+	}
 	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{
 		batchedReqs_t batches;
@@ -147,6 +158,10 @@ int main(int argc, char *argv[])
 		}
 		else{
 			assert(0);
+		}
+		if(is_chunked_prefill){
+			auto chunked_prefill_req=Req(0, Req::Type::ChunkedPrefill, chunked_size, j*chunked_size);
+			batches[0][0]=chunked_prefill_req;
 		}
 		std::shared_ptr<Network> n;
 		DEBUG("model",j);
@@ -193,12 +208,13 @@ int main(int argc, char *argv[])
 
 	cycle_t latency;
 	energy_t energy;
+	double edp_res;
 	mc_t mc;
 
 	if(run_mode=="GA"){
 		auto ga_engine = GA(batched_models, chips, noc);
 		ga_engine.run();
-		auto [l, e, m] = ga_engine.get_best_res();
+		auto [l, e, edp, m] = ga_engine.get_best_res();
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
@@ -211,12 +227,13 @@ int main(int argc, char *argv[])
 			ga_engine.save_progress(search_process_file);
 		latency = l;
 		energy = e;
+		edp_res=edp;
 		mc = m;
 	}
 	else if(run_mode=="random"){
 		auto ga_engine = GA(batched_models, chips, noc);
 		ga_engine.random_run();
-		auto [l, e, m] = ga_engine.get_best_res();
+		auto [l, e, edp, m] = ga_engine.get_best_res();
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
@@ -229,6 +246,7 @@ int main(int argc, char *argv[])
 			ga_engine.save_progress(search_process_file);
 		latency = l;
 		energy = e;
+		edp_res=edp;
 		mc = m;
 	}
 	else if(run_mode=="exec"){
@@ -242,15 +260,23 @@ int main(int argc, char *argv[])
 		execFile >> exec_j;
 		std::vector<int> segmentation=exec_j["segmentation"];
 		std::vector<std::vector<int>> layerToChip=exec_j["layer_to_chip"];
-
+		
 		size_t total = batched_models.size();
 		size_t index = 0;
 
 		double total_latency = 0;
 		energy_t total_energy = 0;
+		double total_edp = 0;
 		vector<cycle_t> latencys;
 		vector<energy_t> energys;
+		vector<double> edps;
 		auto thread_num=std::thread::hardware_concurrency();
+		std::vector<std::unique_ptr<CompassModelEngine>>engines;
+		engines.reserve(batched_models.size());
+		for (size_t i = 0; i < batched_models.size(); ++i) {
+			engines.push_back(std::make_unique<CompassModelEngine>(batched_models[i], chips, noc, segmentation, layerToChip));
+		}
+
 		while (index < total)
 		{
 			std::vector<std::future<std::tuple<cycle_t, energy_t>>> futures;
@@ -258,9 +284,9 @@ int main(int argc, char *argv[])
 			size_t parall_size = std::min(thread_num, static_cast<unsigned int>(total - index));
 			for (size_t i = 0; i < parall_size; ++i)
 			{
-				futures.push_back(std::async(std::launch::async, [batched_models,chips, noc, segmentation, layerToChip,index]() {
-						CompassModelEngine model_engine(batched_models[index], chips, noc, segmentation, layerToChip);
-						auto [l,e]=model_engine.calcLatencyAndEnergy();
+				size_t current_index = index;
+				futures.push_back(std::async(std::launch::async, [&engines,current_index]() {
+						auto [l,e]=engines[current_index]->calcLatencyAndEnergy();
 						return std::make_tuple(l,e);
 					}));
 				index++;
@@ -271,17 +297,20 @@ int main(int argc, char *argv[])
 				auto [latency, energy] = f.get();
 				total_latency += latency;
 				total_energy += energy;
+				total_edp+=latency*energy;
 				latencys.push_back(latency);
 				energys.push_back(energy);
+				edps.push_back(latency*energy);
 			}
 		}
-
+		DEBUG("exec total res",total_latency, total_energy, total_edp);
 		CompassModelEngine model_engine(batched_models.back(), chips, noc, segmentation, layerToChip);
 		auto m=model_engine.calcMonetaryCost();
 		latency=total_latency/total;
 		energy=total_energy/total;
+		edp_res=total_edp/total;
 		mc=m;
-		DEBUG("exec avg res",latency, energy, mc);
+		DEBUG("exec avg res",latency, energy, edp_res, mc);
 		model_engine.calcLatencyAndEnergy(); //for detail
 		if(!detail_latency_file.empty()){
 			auto j=model_engine.get_latency_detail();
@@ -304,9 +333,11 @@ int main(int argc, char *argv[])
 		rapidcsv::Document doc;
 		doc.SetColumnName(0, "latency");
 		doc.SetColumnName(1, "energy");
-		doc.SetColumnName(2, "mc");
+		doc.SetColumnName(2, "edp");
+		doc.SetColumnName(3, "mc");
 		doc.SetColumn<cycle_t>("latency", latencys);
 		doc.SetColumn<energy_t>("energy", energys);
+		doc.SetColumn<double>("edp", edps);
 		doc.SetColumn<mc_t>("mc", vector<mc_t>{mc});
 
 		doc.Save(output_filename);
@@ -319,9 +350,11 @@ int main(int argc, char *argv[])
 		rapidcsv::Document doc;
 		doc.SetColumnName(0, "latency");
 		doc.SetColumnName(1, "energy");
-		doc.SetColumnName(2, "mc");
+		doc.SetColumnName(2, "edp");
+		doc.SetColumnName(3, "mc");
 		doc.SetColumn<cycle_t>("latency", vector<cycle_t>{latency});
 		doc.SetColumn<energy_t>("energy", vector<energy_t>{energy});
+		doc.SetColumn<energy_t>("edp", vector<double>{edp_res});
 		doc.SetColumn<mc_t>("mc", vector<mc_t>{mc});
 
 		doc.Save(output_filename);

@@ -1,8 +1,20 @@
 #include "core_mapping.h"
 #include "debug.h"
+#include "json.hpp"
+#include "compass/utils_compass.h"
+#include "util.h"
+#include "compass/remote_call.h"
 
 #include <cassert>
+#include <cstdlib>      // For system() and remove()
+#include <unistd.h>     // For getpid() - Linux specific
+#include <fstream>      // For std::ifstream
+#include <string>
+#include <thread>
+#include <functional>
+#include <filesystem>
 
+using json = nlohmann::json;
 
 #define HLEN(num_ol) (wl.H + (wl.R - wl.sH)*(num_ol))
 #define WLEN(num_ol) (wl.W + (wl.S - wl.sW)*(num_ol))
@@ -13,7 +25,6 @@
 // Must use this define... Typedef does not work here (since Instance is private)
 #define PolarInst PolarMapper::Instance
 #define EyerissInst EyerissMapper::Instance
-
 
 const char PolarInst::Part::partName[]={
 	'C','K','H','W','N',
@@ -1085,6 +1096,175 @@ void PolarInst::_try_print(const CoreMapper::ConvWl& wl, size_t i){
 	ofs << comp_time << std::endl;
 }
 */
+
+OSMapper::OSMapper(std::shared_ptr<PolarCore> _core)
+	: CoreMapper(_core), core(_core) {}
+
+void OSMapper::set_conv_utime(ConvLayer &l) const
+{
+	(void)l;
+}
+
+CoreMapper::CoreMapping OSMapper::genMapping(const ConvWl &wl) const
+{
+	auto cost=CoreMapping();
+			//check gemm size
+	auto M=std::max(wl.C,core->pes.vecSize*pex_num+1);
+	auto K=std::max(wl.H,len_t(2));
+	auto N=std::max(wl.K,core->pes.laneNum*pey_num+1);
+
+	std::string params="{\"m\":"+std::to_string(M)+",\"k\":"+std::to_string(K)+",\"n\":"+std::to_string(N)+",\"arch\":\"os\",\"vec\":"+std::to_string(core->pes.vecSize)+",\"lane\":"+std::to_string(core->pes.laneNum)+",\"pex\":"+std::to_string(pex_num)+",\"pey\":"+std::to_string(pey_num)+",\"buffer\":"+std::to_string(core->ul3.Size)+"}";
+
+    try {
+
+	std::string result = PythonRequestManager::getInstance().request(params);
+	// std::cout<<result<<std::endl;
+	json res_j=json::parse(result);
+	cost.cost.energy=energy_t(res_j["e"]);
+	cost.cost.time=time_t(res_j["t"]);
+        
+    } catch (const std::runtime_error& e) {
+        std::cout << "Runtime error: " << e.what() << std::endl;
+		std::cout << "Params: " << params << std::endl;
+        exit(1);
+    } catch (const std::exception& e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+        exit(1);
+    }
+
+    return cost;
+}
+
+WSMapper::WSMapper(std::shared_ptr<PolarCore> _core)
+	: CoreMapper(_core), core(_core) {}
+
+void WSMapper::set_conv_utime(ConvLayer &l) const
+{
+	(void)l;
+}
+
+CoreMapper::CoreMapping WSMapper::genMapping(const ConvWl &wl) const
+{
+	auto cost=CoreMapping();
+			//check gemm size
+	auto M=std::max(wl.H,len_t(2));
+	auto K=std::max(wl.C,core->pes.vecSize*pex_num+1);
+	auto N=std::max(wl.K,core->pes.laneNum*pey_num+1);
+
+	std::string params="{\"m\":"+std::to_string(M)+",\"k\":"+std::to_string(K)+",\"n\":"+std::to_string(N)+",\"arch\":\"ws\",\"vec\":"+std::to_string(core->pes.vecSize)+",\"lane\":"+std::to_string(core->pes.laneNum)+",\"pex\":"+std::to_string(pex_num)+",\"pey\":"+std::to_string(pey_num)+",\"buffer\":"+std::to_string(core->ul3.Size)+"}";
+
+    try {
+
+	std::string result = PythonRequestManager::getInstance().request(params);
+	// std::cout<<result<<std::endl;
+	json res_j=json::parse(result);
+	cost.cost.energy=energy_t(res_j["e"]);
+	cost.cost.time=time_t(res_j["t"]);
+        
+    } catch (const std::runtime_error& e) {
+        std::cout << "Runtime error: " << e.what() << std::endl;
+		std::cout << "Params: " << params << std::endl;
+        exit(1);
+    } catch (const std::exception& e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+        exit(1);
+    }
+
+    return cost;
+}
+
+ZigzagMapper::ZigzagMapper(std::shared_ptr<PolarCore> _core, const std::string& _core_type)
+	: CoreMapper(_core), core(_core), core_type(_core_type) {}
+
+void ZigzagMapper::set_conv_utime(ConvLayer &l) const
+{
+	(void)l;
+}
+
+CoreMapper::CoreMapping ZigzagMapper::genMapping(const ConvWl &wl) const
+{
+	// 定义返回类型为三元组 (int, int, int)
+	using MacTuple = std::tuple<len_t, len_t, len_t>;
+	using MacVector = std::vector<int>;
+	using ArchFunction = std::function<MacTuple(const MacVector&)>;
+
+	// 创建 arch_min_map
+	static const std::unordered_map<std::string, ArchFunction> arch_min_map = {
+		{"os", [](const MacVector& mac) -> MacTuple {
+			return std::make_tuple(mac[0] * mac[2] + 1, 2, mac[1] * mac[3] + 1);
+		}},
+		
+		{"ws", [](const MacVector& mac) -> MacTuple {
+			return std::make_tuple(2, mac[0] * mac[2] + 1, mac[1] * mac[3] + 1);
+		}},
+		
+		{"tesla", [](const MacVector& mac) -> MacTuple {
+			return std::make_tuple(mac[1] * mac[2] + 1, 2, mac[0] + 1);
+		}},
+		
+		{"ascend", [](const MacVector& mac) -> MacTuple {
+			return std::make_tuple(mac[2] * mac[3] + 1, mac[1] + 1, mac[0] + 1);
+		}},
+		
+		{"tpu", [](const MacVector& mac) -> MacTuple {
+			return std::make_tuple(2, mac[1] + 1, mac[0] + 1);
+		}}
+	};
+	static const std::map<std::string, std::vector<int>> arch_mac_map = {
+		{"os", {1,1,2,2}},
+		{"ws", {1,1,2,2}},
+		{"tesla", {8,2,1}},
+		{"ascend", {8,8,1,1}},
+		{"tpu", {1,1}},
+	};
+
+	auto mac_map=arch_mac_map.at(core_type);
+	int prod_mac=1;
+	for(auto m : mac_map){
+		prod_mac*=m;
+	}
+	auto total_mac=core->pes.vecSize*core->pes.laneNum*pex_num*pey_num;
+	assert(total_mac % prod_mac == 0);
+	auto per_res=nthRoot(total_mac / prod_mac,mac_map.size());
+	assert(per_res.isInteger);
+	auto per_mac=per_res.nearestRoot;
+	MacVector macs;
+	for (size_t i=0;i<mac_map.size();i++){
+		macs.push_back(per_mac*mac_map[i]);
+	}
+
+	auto [m_min ,k_min,n_min]=arch_min_map.at(core_type)(macs);
+
+	auto cost=CoreMapping();
+			//check gemm size
+	auto M=std::max(wl.H,m_min);
+	auto K=std::max(wl.C,k_min);
+	auto N=std::max(wl.K,n_min);
+
+	std::string params="{\"m\":"+std::to_string(M)+",\"k\":"+std::to_string(K)+",\"n\":"+std::to_string(N)+",\"arch\":\""+core_type+"\",\"mac\":[";
+	for (size_t i=0;i<macs.size();i++){
+		params+=std::to_string(macs[i]);
+		if(i+1<mac_map.size()) params+=",";
+	}
+	params+="],\"buf\":"+std::to_string(core->ul3.Size)+"}";
+
+    try {
+	std::string result = PythonRequestManager::getInstance().request(params);
+	// std::cout<<result<<std::endl;
+	json res_j=json::parse(result);
+	cost.cost.energy=energy_t(res_j["e"]);
+	cost.cost.time=time_t(res_j["t"]);
+        
+    } catch (const std::runtime_error& e) {
+        std::cout << "Runtime error: " << e.what() << std::endl;
+		std::cout << "Params: " << params << std::endl;
+        exit(1);
+    } catch (const std::exception& e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+        exit(1);
+    }
+    return cost;
+}
 
 #undef PolarInst
 #undef EyerissInst

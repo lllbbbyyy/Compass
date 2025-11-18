@@ -284,7 +284,7 @@ void CompassModelEngine::setLayerToChip(const std::vector<std::vector<cidx_t>>& 
 void CompassModelEngine::setSegmentation(const std::vector<int>& _segmentation, const std::vector<std::vector<cidx_t>>& _layerToChip){
 
     segmentation = _segmentation;
-    layerDim = segmentation.size()+1;
+    layerDim = batchedModels[0]->len();
     segmentsLayers.clear();
     std::vector<lid_t> curLayers;
     for(size_t i = 0; i < layerDim; i++){

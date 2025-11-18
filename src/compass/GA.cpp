@@ -42,18 +42,46 @@ pipeline_mapping(size_t BATCH_SIZE,
     return {segmentation, layerToChip};
 }
 
+static std::pair<std::vector<int>,
+                 std::vector<std::vector<int>>>
+init_mapping(size_t BATCH_SIZE,
+                 size_t LAYER_NUM,
+                 size_t CHIPLET_NUM)
+{
+
+    std::vector<int> segmentation(LAYER_NUM - 1, 1);
+    std::vector<std::vector<cidx_t>> layerToChip;
+
+    for (size_t j = 0; j < BATCH_SIZE; ++j)
+    {
+        layerToChip.emplace_back();
+    }
+
+    for (size_t i = 0; i < BATCH_SIZE; i++)
+    {
+        for (size_t j = 0; j < LAYER_NUM; ++j)
+        {
+            layerToChip[i].emplace_back(j % CHIPLET_NUM);
+        }
+    }
+    return {segmentation, layerToChip};
+}
+
 int GA::pop_size = 250;   
 int GA::generations = 300; 
 
 void GA::initialize_population()
 {
     auto [pipeline_seg, pipeline_laytochip] = pipeline_mapping(BATCH_SIZE, LAYER_NUM, CHIPLET_NUM);
+    auto [init_seg, init_laytochip] = init_mapping(BATCH_SIZE, LAYER_NUM, CHIPLET_NUM);
     population[0] = Individual(pipeline_seg, pipeline_laytochip);
-    for (size_t i = 0; i < population.size(); i++)
+    population[1] = Individual(init_seg, init_laytochip);
+    for (size_t i = 0+2; i < population.size(); i++)
     {
         auto [seg, laytochip] = random_mapping(BATCH_SIZE, LAYER_NUM, CHIPLET_NUM);
         population[i] = Individual(seg, laytochip);
     }
+    DEBUG("Population initialized. Evaluating initial population...");
     evaluate_population_parallel(population); 
 }
 
@@ -95,17 +123,20 @@ void GA::evaluate_individual(int parallel_i, Individual &ind)
 {
     cycle_t all_model_latency = 0;
     energy_t all_model_energy = 0;
+    double all_cost=0;
     for(size_t i=0;i<engines.size();++i)
     {
         engines[i][parallel_i]->setSegmentation(ind.segmentation, ind.layerToChip);
         auto [latency, energy] = engines[i][parallel_i]->calcLatencyAndEnergy();
         all_model_latency += latency;
         all_model_energy += energy;
+        all_cost += cost_func(latency, energy, 1);
     }
     
     ind.latency = all_model_latency / engines.size();
     ind.energy = all_model_energy / engines.size();
-    ind.fitness = 1 / cost_func(ind.latency, ind.energy, 1);
+    all_cost /= engines.size();
+    ind.fitness = 1 / all_cost;
 }
 
 Individual GA::crossover(const Individual &p1, const Individual &p2)
@@ -415,15 +446,16 @@ void GA::random_run()
     std::cout << "random run finished" << std::endl;
 }
 
-std::tuple<cycle_t, energy_t, mc_t> GA::get_best_res()
+std::tuple<cycle_t, energy_t, double, mc_t> GA::get_best_res()
 {
     
 
     size_t total = engines.size();
     size_t index = 0;
 
-   double total_latency = 0;
+    double total_latency = 0;
     energy_t total_energy = 0;
+    double total_edp = 0;
 
     while (index < total)
     {
@@ -446,10 +478,11 @@ std::tuple<cycle_t, energy_t, mc_t> GA::get_best_res()
             auto [latency, energy] = f.get();
             total_latency += latency;
             total_energy += energy;
+            total_edp+=latency*energy;
         }
     }
     auto mc = engines.back()[0]->calcMonetaryCost();
-    return {total_latency/engines.size(), total_energy/engines.size(), mc};
+    return {total_latency/engines.size(), total_energy/engines.size(),total_edp/engines.size(), mc};
 }
 
 
@@ -464,7 +497,7 @@ void GA::save_best_solution(const std::string &filename,int micro_batch_size)
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution saved to " << filename << "\n";
     std::cout << "Best fitness: " << best_fitness << "\n";
-    std::cout << "Latency: " << best_solution.latency << ", Energy: " << best_solution.energy << "\n";
+    std::cout << "Latency: " << best_solution.latency << ", Energy: " << best_solution.energy << ", EDP: " << 1/best_fitness << "\n";
 }
 
 void GA::save_latency_detail(const std::string &filename)

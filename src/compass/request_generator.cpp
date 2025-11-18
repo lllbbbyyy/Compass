@@ -99,6 +99,13 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size) {
 
     // Put prefill requests before decode
     res_reqs.clear();
+    auto sort_by_lens_asc = [](const Req& a, const Req& b) {
+        if (a.lens != b.lens)
+            return a.lens < b.lens;           // Smaller lens first
+        return a.his_lens < b.his_lens;       // If lens equal, smaller his_lens first
+    };
+    std::sort(prefill_reqs.begin(), prefill_reqs.end(), sort_by_lens_asc);
+    std::sort(decode_reqs.begin(), decode_reqs.end(), sort_by_lens_asc);
     res_reqs.insert(res_reqs.end(), prefill_reqs.begin(), prefill_reqs.end());
     res_reqs.insert(res_reqs.end(), decode_reqs.begin(), decode_reqs.end());
 
@@ -186,13 +193,18 @@ batchedReqs_t ReqGenerator::generateReq(int micro_batch_size, int num_prefill, i
     assert(prefill_count == num_prefill && "Prefill count mismatch!");
     assert(decode_count == num_decode && "Not enough valid decode requests!");
 
-    auto sort_by_lens_desc = [](const Req& a, const Req& b) {
+    // auto sort_by_lens_desc = [](const Req& a, const Req& b) {
+    //     if (a.lens != b.lens)
+    //         return a.lens > b.lens;           // Larger lens first
+    //     return a.his_lens > b.his_lens;       // If lens equal, larger his_lens first
+    // };
+    auto sort_by_lens_asc = [](const Req& a, const Req& b) {
         if (a.lens != b.lens)
-            return a.lens > b.lens;           // Larger lens first
-        return a.his_lens > b.his_lens;       // If lens equal, larger his_lens first
+            return a.lens < b.lens;           // Smaller lens first
+        return a.his_lens < b.his_lens;       // If lens equal, smaller his_lens first
     };
-    std::sort(prefill_reqs.begin(), prefill_reqs.end(), sort_by_lens_desc);
-    std::sort(decode_reqs.begin(), decode_reqs.end(), sort_by_lens_desc);
+    std::sort(prefill_reqs.begin(), prefill_reqs.end(), sort_by_lens_asc);
+    std::sort(decode_reqs.begin(), decode_reqs.end(), sort_by_lens_asc);
 
     res_reqs.insert(res_reqs.end(), prefill_reqs.begin(), prefill_reqs.end());
     res_reqs.insert(res_reqs.end(), decode_reqs.begin(), decode_reqs.end());

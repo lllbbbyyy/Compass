@@ -1,0 +1,188 @@
+{
+    "num_chiplets": 36,
+    "nop_bw": 128,
+    "dram_bw": 64,
+    "micro_batch": 4,
+    "chiplets": [
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      },
+      {
+        "type": "tpu",
+        "buffer_size": 2048,
+        "compute_units": 1024
+      }
+    ]
+  }

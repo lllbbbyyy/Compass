@@ -63,7 +63,7 @@ std::pair<int, int> closest_factors(int n) {
     return {1, n};  // fallback (theoretically should not reach here)
 }
 
-std::shared_ptr<EyerissMapper>
+std::shared_ptr<CoreMapper>
 createEyerissCoreMapper(int mac_num, vol_t ubufSize) {
     static constexpr double turnover_factor = 0.3 / 0.5;
     assert(mac_num%(pex_num*pey_num)==0);
@@ -96,8 +96,8 @@ createEyerissCoreMapper(int mac_num, vol_t ubufSize) {
     return std::make_shared<EyerissMapper>(core);
 }
 
-std::shared_ptr<PolarMapper>
-createPolarCoreMapper(int mac_num, vol_t ubufSize) {
+std::shared_ptr<CoreMapper>
+createPolarCoreMapper(int mac_num, vol_t ubufSize, std::string mapping) {
     assert(mac_num%(pex_num*pey_num)==0);
     auto [vector_len, lane_len] = closest_factors(mac_num/(pex_num*pey_num));
 
@@ -110,9 +110,9 @@ createPolarCoreMapper(int mac_num, vol_t ubufSize) {
     PolarCore::PESetting s(vector_len, lane_len, 0.018);
     PolarCore::Bus bus(pex_num, pey_num, 0.018, 64);
 
-    al1.Size = 8  * vector_len / 8 KB;
-    ol1.Size = 2  * lane_len   / 8 KB;
-    wl1.Size = 4  * lane_len * vector_len / 64 KB;
+    al1.Size = 8 KB;
+    ol1.Size = 8 KB;
+    wl1.Size = 8 KB;
     ol2.Size = 28 * vector_len * lane_len / 64 KB;
     wl2.Size = 0;
     ul3.Size = ubufSize;
@@ -137,11 +137,24 @@ createPolarCoreMapper(int mac_num, vol_t ubufSize) {
     ul3.WCost = 0.234025  * 8 * ul3.Size / (1024 KB) * turnover_factor;
     al2.RCost = al2.WCost = 0;
     wl2.RCost = wl2.WCost = 0;
+    // std::cout<<"al1.RCost: "<<al1.RCost<<", al1.WCost: "<<al1.WCost<<std::endl;
+    // std::cout<<"wl1.RCost: "<<wl1.RCost<<", wl1.WCost: "<<wl1.WCost<<std::endl;
+    // std::cout<<"ol1.RCost: "<<ol1.RCost<<", ol1.WCost: "<<ol1.WCost<<std::endl;
+    // std::cout<<"ul3.RCost: "<<ul3.RCost<<", ul3.WCost: "<<ul3.WCost<<std::endl;
+    /*
+    al1.RCost: 1.04, al1.WCost: 0.67
+    wl1.RCost: 0.56, wl1.WCost: 0.67
+    ol1.RCost: 0.56, ol1.WCost: 0.67
+    ul3.RCost: 2.08, ul3.WCost: 2.25
+    */
 
     auto core = std::make_shared<PolarCore>(
         s, LR_mac_num, LR_mac_cost, bus,
         PolarCore::Buffers{ al1, wl1, ol1, al2, wl2, ol2, ul3 });
 
+    if (mapping.length() != 0) {
+        return std::make_shared<ZigzagMapper>(core,mapping);
+    }
     return std::make_shared<PolarMapper>(core);
 }
 
