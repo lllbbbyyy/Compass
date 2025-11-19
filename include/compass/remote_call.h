@@ -16,43 +16,43 @@ class PythonRequestManager {
 public:
     static PythonRequestManager& getInstance();
     
-    // 禁止拷贝和赋值
+    // Disable copying and assignment
     PythonRequestManager(const PythonRequestManager&) = delete;
     PythonRequestManager& operator=(const PythonRequestManager&) = delete;
     
-    // 发起请求，返回结果
+    // Make request and return result
     std::string request(const std::string& params);
     
-    // 清除缓存
+    // Clear cache
     void clearCache();
     
-    // 设置缓存大小限制
+    // Set cache size limit
     void setCacheLimit(size_t limit);
-    void disconnect();  // 新增：断开连接
+    void disconnect();  // New: disconnect
     
     ~PythonRequestManager();
 
 private:
     PythonRequestManager();
     
-    // 计算参数的哈希值作为key
+    // Compute hash of parameters as key
     std::string computeHash(const std::string& params);
     
-    // 实际执行python调用
+    // Actually execute python call
     std::string executePythonRequest(const std::string& params);
     
-    // 长连接相关
+    // Persistent connection related
     bool ensureConnected();
     int connectToServer();
-    bool sendData(const std::string& data);  // 不再需要传入sock
-    std::string receiveData();                // 不再需要传入sock
+    bool sendData(const std::string& data);  // No need to pass sock
+    std::string receiveData();               // No need to pass sock
 
 private:
-    // 持久化连接
+    // Persistent connection
     int persistentSocket_;
     bool connected_;
-    std::mutex socketMutex_;  // 保护socket的锁
-    // 互斥锁
+    std::mutex socketMutex_;  // Lock for protecting socket
+    // Mutexes
     std::shared_mutex cacheMutex_;
     std::shared_mutex requestMutex_;
 
@@ -61,16 +61,16 @@ private:
         std::vector<std::shared_ptr<std::promise<std::string>>> waiters;
     };
     
-    // 缓存：key -> result
+    // Cache: key -> result
     std::unordered_map<std::string, std::string> cache_;
     
-    // 正在处理的请求：key -> PendingRequest
+    // Requests in progress: key -> PendingRequest
     std::unordered_map<std::string, std::shared_ptr<PendingRequest>> pendingRequests_;
     
-    // LRU缓存顺序维护
+    // LRU cache order maintenance
     std::queue<std::string> cacheOrder_;
     
-    // 配置
+    // Configuration
     std::string serverHost_;
     int serverPort_;
     size_t cacheLimit_;

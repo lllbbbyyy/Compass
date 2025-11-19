@@ -1183,12 +1183,11 @@ void ZigzagMapper::set_conv_utime(ConvLayer &l) const
 
 CoreMapper::CoreMapping ZigzagMapper::genMapping(const ConvWl &wl) const
 {
-	// 定义返回类型为三元组 (int, int, int)
 	using MacTuple = std::tuple<len_t, len_t, len_t>;
 	using MacVector = std::vector<int>;
 	using ArchFunction = std::function<MacTuple(const MacVector&)>;
 
-	// 创建 arch_min_map
+	// create arch_min_map
 	static const std::unordered_map<std::string, ArchFunction> arch_min_map = {
 		{"os", [](const MacVector& mac) -> MacTuple {
 			return std::make_tuple(mac[0] * mac[2] + 1, 2, mac[1] * mac[3] + 1);

@@ -12,7 +12,7 @@ chunked_groups={
 }
 
 def read_search_res(csv_path):
-    """读取search_res.csv文件并返回latency和energy的值"""
+    """Read search_res.csv file and return latency and energy values"""
     try:
         df=pd.read_csv(csv_path)
         latency=df['latency'].mean()
@@ -23,21 +23,21 @@ def read_search_res(csv_path):
         energy=df['energy'].mean()
         return latency, energy
     except Exception as e:
-        print(f"读取文件 {csv_path} 时出错: {e}", file=sys.stderr)
+        print(f"Error reading file {csv_path}: {e}", file=sys.stderr)
         return None, None
 
 def process_folder_a(folder_a_path, print_all=False):
     """
-    处理单个A文件夹，找出latency*energy最小的B文件夹
+    Process a single folder A, find the folder B with the minimum latency*energy product
     
-    参数:
-        folder_a_path: A文件夹的路径
-        print_all: 如果为True，打印所有B文件夹的结果（按乘积从小到大排序）
+    Args:
+        folder_a_path: Path to folder A
+        print_all: If True, print all folder B results (sorted by product ascending)
     
-    返回:
-        min_folder_b: 乘积最小的B文件夹名称
-        min_product: 最小乘积值
-        found_any_csv: 是否找到任何CSV文件
+    Returns:
+        min_folder_b: Name of folder B with minimum product
+        min_product: Minimum product value
+        found_any_csv: Whether any CSV file was found
     """
     min_product = float('inf')
     min_latency=float('inf')
@@ -45,31 +45,31 @@ def process_folder_a(folder_a_path, print_all=False):
 
     min_folder_b = None
     found_any_csv = False
-    results = []  # 存储所有结果用于排序
+    results = []  # Store all results for sorting
     
-    # 遍历A文件夹下的所有子文件夹
+    # Iterate all subfolders under folder A
     try:
         for folder_b in os.listdir(folder_a_path):
             folder_b_path = os.path.join(folder_a_path, folder_b)
             
-            # 确保是文件夹
+            # Ensure it is a folder
             if not os.path.isdir(folder_b_path):
                 continue
             
-            # 检查是否存在search_res.csv
+            # Check if exec_res.csv exists
             csv_path = os.path.join(folder_b_path, 'exec_res.csv')
             if not os.path.exists(csv_path):
                 continue
             
             found_any_csv = True
             
-            # 读取数据并计算乘积
+            # Read data and calculate product
             latency, energy = read_search_res(csv_path)
             if latency is not None and energy is not None:
                 product = latency * energy
                 results.append((folder_b, product, latency, energy))
                 
-                # 更新最小值
+                # Update minimum
                 if product < min_product:
                     min_latency=latency
                     min_energy=energy
@@ -77,14 +77,14 @@ def process_folder_a(folder_a_path, print_all=False):
                     min_folder_b = folder_b
     
     except Exception as e:
-        print(f"处理文件夹 {folder_a_path} 时出错: {e}", file=sys.stderr)
+        print(f"Error processing folder {folder_a_path}: {e}", file=sys.stderr)
         return None, None, False
     
-    # 如果需要打印所有结果，按乘积从小到大排序
+    # If print_all is True, print all results sorted by product ascending
     if print_all and results:
-        results.sort(key=lambda x: x[1])  # 按乘积排序
+        results.sort(key=lambda x: x[1])  # Sort by product
         folder_a_name = os.path.basename(folder_a_path)
-        print(f"\n  {folder_a_name} 的所有子文件夹结果（按乘积从小到大）:")
+        print(f"\n  All subfolder results of {folder_a_name} (sorted by product ascending):")
         print(f"  {'-' * 70}")
         for i, (folder_b, product, latency, energy) in enumerate(results, 1):
             print(f"  {i}. {folder_b}:")
@@ -98,27 +98,27 @@ def main():
     assert len(sys.argv)==2, "Usage: python3 get_res.py <seq length distri>"
     seq_length_distri=sys.argv[1]
 
-    # 获取脚本所在目录
+    # Get script directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # 获取同级目录下的所有文件夹
+    # Get all folders in the same directory
     folder_list = []
     for item in os.listdir(script_dir):
         item_path = os.path.join(script_dir, item)
-        # 只处理文件夹，排除脚本文件本身
+        # Only process folders, exclude the script file itself
         if os.path.isdir(item_path):
             folder_list.append(item)
     
-    # 按名称排序
+    # Sort by name
     folder_list.sort()
     
     if not folder_list:
-        print("未找到任何文件夹")
+        print("No folders found")
         return
     
-    # 处理每个文件夹
+    # Process each folder
     print("=" * 60)
-    print("分析结果:")
+    print("Analysis results:")
     print("=" * 60)
     
     res_map={}
@@ -132,12 +132,12 @@ def main():
             print(f"'{folder_name}/{min_folder_b}',{min_latency*min_energy:.2e},(latency={min_latency:.2e}, energy={min_energy:.2e})")
             res_map[folder_name]=(min_latency,min_energy)
         elif found_any_csv:
-            print(f"{folder_name}: 找到CSV文件但无法读取有效数据")
+            print(f"{folder_name}: CSV files found but no valid data could be read")
         else:
-            print(f"{folder_name}: 未找到包含search_res.csv的子文件夹")
+            print(f"{folder_name}: No subfolder containing exec_res.csv found")
     
     print("=" * 60)
-    print("汇报每一个数据集下不同硬件的chunked prefill执行的结果：")
+    print("Report of chunked prefill execution results for different hardware under each dataset:")
     # dataset=['sharegpt','cnndm']
     dataset=[seq_length_distri]
     hardware=['os','ws','he'] # ,'hecross','hecb'
@@ -154,7 +154,7 @@ def main():
             res_key=f"chunked_prefill_{d}_{h}"
             res_for_scenario[res_key]=total_edp
             
-    print("汇报每一个数据集下不同硬件的vLLM混合执行的结果：")
+    print("Report of vLLM mixed execution results for different hardware under each dataset:")
     for d in dataset:
         for h in hardware:
             prefill_key=f"prefill_{d}_{h}"
@@ -169,7 +169,7 @@ def main():
             res_key=f"vllm_{d}_{h}"
             res_for_scenario[res_key]=total_edp
 
-    print("汇报每一个数据集下不同硬件的Orca混合执行的结果：")
+    print("Report of Orca mixed execution results for different hardware under each dataset:")
     for d in dataset:
         for h in hardware:
             prefill_key=f"mixed_{d}_{h}"
@@ -184,7 +184,7 @@ def main():
             res_key=f"orca_{d}_{h}"
             res_for_scenario[res_key]=total_edp
 
-    print("汇报不同硬件跨数据集的运行结果")
+    print("Report of cross-dataset results for different hardware")
     scenario=['chunked_prefill','vllm','orca']
     res_print={}
     for s in scenario:
@@ -200,7 +200,7 @@ def main():
             print(f"{s} {h} geo mean edp:{edp_geo:.2e}")
             res_print[f"{s}_{h}_compass"]=edp_geo
     print(json.dumps(res_print, indent=4))
-    # print("汇报每一个数据集下不同硬件的vLLM混合执行的结果：")
+    # print("Report of vLLM mixed execution results for different hardware under each dataset:")
     # dataset=['sharegpt']
     # hardware=['os','ws','heside','hecross','hecb']
     # for d in dataset:
@@ -214,8 +214,6 @@ def main():
     #         total_energy=prefill_energy/4+decode_energy*5
     #         total_edp=total_latency*total_energy
     #         print(f"{d} {h} total edp:{total_edp:.2e} (latency:{total_latency:.2e}, energy:{total_energy:.2e})")
-
-
 
 if __name__ == "__main__":
     main()

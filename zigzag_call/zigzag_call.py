@@ -20,7 +20,7 @@ import logging
 from zigzag_template import workload_template,hardware_template,mapping_template
 
 class PersistentLRUCache:
-    """支持磁盘持久化的 LRU 缓存"""
+    """LRU cache with disk persistence"""
     
     def __init__(self, capacity=1000, cache_file='cache.pkl', auto_save_interval=60):
         self.cache = OrderedDict()
@@ -33,53 +33,53 @@ class PersistentLRUCache:
         self.dirty = False
         self._save_timer = None
         
-        # 启动时加载缓存
+        # Load cache at startup
         self.load()
         
-        # 启动定期保存
+        # Start periodic saving
         if auto_save_interval > 0:
             self.auto_save()
         
-        # ✅ 注册多种退出时保存的方式
+        # Register multiple exit handlers
         self._register_exit_handlers()
     
     def _register_exit_handlers(self):
-        """注册所有可能的退出处理器"""
+        """Register all possible exit handlers"""
         
-        # 方法1: atexit - 正常退出时调用
+        # Method 1: atexit - called on normal exit
         atexit.register(self._exit_save)
         
-        # 方法2: signal - 捕获 Ctrl+C (SIGINT) 和 kill (SIGTERM)
+        # Method 2: signal - capture Ctrl+C (SIGINT) and kill (SIGTERM)
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
         print("[Cache] ✓ Exit handlers registered (atexit + signal)",flush=True)
     
     def _signal_handler(self, signum, frame):
-        """信号处理器 - 捕获 Ctrl+C 等信号"""
+        """Signal handler - captures Ctrl+C and other signals"""
         
         if signum == signal.SIGINT:
             signal_name = 'SIGINT' 
             print(f"\n[Cache] Received {signal_name}, saving cache...",flush=True)
             
-            # 保存缓存
+            # Save cache
             self.save()
             
-            # 打印最终统计
+            # Print final stats
             stats = self.stats()
             print(f"[Cache] Final stats: {stats['hits']} hits, {stats['misses']} misses, "
                 f"{stats['size']} entries",flush=True)
             
-            # 退出程序
+            # Exit program
             sys.exit(0)
     
     def _exit_save(self):
-        """退出时保存（由 atexit 调用）"""
+        """Save on exit (called by atexit)"""
         print("[Cache] Program exiting, saving cache...",flush=True)
         self.save()
     
     def get(self, key):
-        """获取缓存值"""
+        """Get cached value"""
         with self.lock:
             if key in self.cache:
                 self.cache.move_to_end(key)
@@ -90,7 +90,7 @@ class PersistentLRUCache:
                 return None
     
     def put(self, key, value):
-        """设置缓存值"""
+        """Set cached value"""
         with self.lock:
             if key in self.cache:
                 self.cache.move_to_end(key)
@@ -105,7 +105,7 @@ class PersistentLRUCache:
             self.dirty = True
     
     def load(self):
-        """从磁盘加载缓存"""
+        """Load cache from disk"""
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, 'rb') as f:
@@ -121,7 +121,7 @@ class PersistentLRUCache:
             print(f"[Cache] No existing cache file, starting fresh",flush=True)
     
     def save(self):
-        """保存缓存到磁盘"""
+        """Persist cache to disk"""
         if not self.dirty:
             print("[Cache] No changes to save",flush=True)
             return
@@ -134,12 +134,12 @@ class PersistentLRUCache:
                     'misses': self.misses
                 }
                 
-                # 确保目录存在
+                # Ensure directory exists
                 cache_dir = os.path.dirname(self.cache_file)
                 if cache_dir and not os.path.exists(cache_dir):
                     os.makedirs(cache_dir)
                 
-                # 原子写入
+                # Atomic write
                 temp_file = self.cache_file + '.tmp'
                 with open(temp_file, 'wb') as f:
                     pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -154,7 +154,7 @@ class PersistentLRUCache:
             traceback.print_exc()
     
     def auto_save(self):
-        """定期自动保存"""
+        """Periodic auto-save"""
         def save_periodically():
             import time
             while True:
@@ -167,7 +167,7 @@ class PersistentLRUCache:
         thread.start()
     
     def clear(self):
-        """清空缓存"""
+        """Clear cache"""
         with self.lock:
             self.cache.clear()
             self.hits = 0
@@ -176,7 +176,7 @@ class PersistentLRUCache:
             self.save()
     
     def stats(self):
-        """获取统计信息"""
+        """Get statistics"""
         with self.lock:
             total = self.hits + self.misses
             hit_rate = (self.hits / total * 100) if total > 0 else 0
@@ -193,26 +193,26 @@ class PersistentLRUCache:
         return len(self.cache)
     
     def __call__(self, func):
-        """装饰器实现"""
+        """Decorator implementation"""
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            # 生成缓存键
+            # Build cache key
             cache_key = self._make_key(func.__name__, args, kwargs)
             
-            # 查询缓存
+            # Query cache
             cached_result = self.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
-            # 执行函数
+            # Execute function
             result = func(*args, **kwargs)
             
-            # 存入缓存
+            # Store in cache
             self.put(cache_key, result)
             
             return result
         
-        # 附加方法
+        # Attach helper methods
         wrapper.cache_info = self.stats
         wrapper.cache_clear = self.clear
         wrapper.cache_save = self.save
@@ -220,7 +220,7 @@ class PersistentLRUCache:
         return wrapper
     
     def _make_key(self, func_name, args, kwargs):
-        """生成缓存键"""
+        """Generate cache key"""
         try:
             key_data = pickle.dumps((func_name, args, tuple(sorted(kwargs.items()))))
             return hashlib.md5(key_data).hexdigest()
@@ -232,21 +232,21 @@ class PersistentLRUCache:
 request_cache = PersistentLRUCache(
     capacity=1000000,
     cache_file='request_cache.pkl',
-    auto_save_interval=60*60  # 每60秒自动保存
+    auto_save_interval=60*60  # Auto-save every 60 seconds
 )
 
 def reset_logging_handlers(new_stream):
-    """重置所有 logging handlers 的输出流"""
+    """Reset all logging handlers output stream"""
     root_logger = logging.getLogger()
     
-    # 遍历所有 handlers
+    # Iterate through all handlers
     for handler in root_logger.handlers[:]:
         if isinstance(handler, logging.StreamHandler):
-            # 更新 handler 的 stream
+            # Update handler's stream
             handler.stream = new_stream
             handler.flush()
     
-    # 同时处理所有子 logger
+    # Process all sub-loggers
     for name in logging.Logger.manager.loggerDict:
         logger = logging.getLogger(name)
         for handler in logger.handlers[:]:
@@ -303,7 +303,7 @@ def process_request(params,process_dir):
     # bar_plot_cost_model_evaluations_breakdown(cme_for_all_layers, save_path=output_dir/"plot_breakdown.png") 
 
 def recv_exactly(sock, n):
-    """接收恰好n字节的数据"""
+    """Receive exactly n bytes of data"""
     data = b''
     while len(data) < n:
         chunk = sock.recv(n - len(data))
@@ -313,7 +313,7 @@ def recv_exactly(sock, n):
     return data
 
 def handle_client(client_socket,address):
-    """处理单个客户端连接"""
+    """Handle a single client connection"""
     try:
         client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -324,7 +324,7 @@ def handle_client(client_socket,address):
             try:
                 request_count += 1
                 
-                # 1. 接收请求长度
+                # 1. Receive request length
                 length_data = recv_exactly(client_socket, 4)
                 msg_length = struct.unpack('!I', length_data)[0]
                 
@@ -332,10 +332,10 @@ def handle_client(client_socket,address):
                     print(f"[Error] Invalid length: {msg_length}",flush=True)
                     break
                 
-                # 2. 接收请求数据
+                # 2. Receive request data
                 data = recv_exactly(client_socket, msg_length)
                 
-                # 3. 解析和处理
+                # 3. Parse and process
                 request = data.decode('utf-8')
                 print(f"[Info] Request: {request}",flush=True)
 
@@ -356,7 +356,7 @@ def handle_client(client_socket,address):
 
                 print(f"[Info] Response: {response}",flush=True)
                 
-                # 4. 发送响应
+                # 4. Send response
                 response_data = json.dumps(response).encode('utf-8')
                 response_length = struct.pack('!I', len(response_data))
                 full_response = response_length + response_data
@@ -403,7 +403,7 @@ def main():
             client_thread = threading.Thread(
                     target=handle_client,
                     args=(client_socket, address),
-                    daemon=True  # 守护线程，主线程退出时自动结束
+                    daemon=True  # Daemon thread, automatically ends when the main thread exits
                 )
             client_thread.start()
             
@@ -414,7 +414,7 @@ def main():
             print(f"[Error] Accept error: {e}",flush=True)
 
 def main2():
-    # 示例请求
+    # Example request
     request = {
         'm': 128,
         'k': 2,

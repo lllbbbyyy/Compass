@@ -263,14 +263,12 @@ private:
     mutable std::shared_mutex mutex_;
 };
 
-// 结构体用于返回结果
 template<typename T>
 struct NthRootResult {
-    bool isInteger;      // 是否为完全n次方
-    T nearestRoot;       // 最接近的整数根
+    bool isInteger;      
+    T nearestRoot;       
 };
 
-// 计算 base 的 n 次方，带溢出检测
 template<typename T>
 T safePower(T base, int n) {
     static_assert(std::is_integral<T>::value, "T must be an integral type");
@@ -284,14 +282,13 @@ T safePower(T base, int n) {
     T absBase = (base < 0) ? -base : base;
     
     for (int i = 0; i < n; i++) {
-        // 检查是否会溢出
+        // check overflow
         if (result > std::numeric_limits<T>::max() / absBase) {
-            return std::numeric_limits<T>::max(); // 返回最大值表示溢出
+            return std::numeric_limits<T>::max(); 
         }
         result *= absBase;
     }
     
-    // 如果base是负数且n是奇数，结果为负
     if (base < 0 && n % 2 == 1) {
         result = -result;
     }
@@ -299,7 +296,6 @@ T safePower(T base, int n) {
     return result;
 }
 
-// 使用试根法计算n次方根
 template<typename T>
 NthRootResult<T> nthRoot(T x, int n) {
     static_assert(std::is_integral<T>::value, "T must be an integral type");
@@ -308,7 +304,6 @@ NthRootResult<T> nthRoot(T x, int n) {
     result.isInteger = false;
     result.nearestRoot = 0;
     
-    // 边界情况处理
     if (n <= 0) {
         return result;
     }
@@ -319,12 +314,10 @@ NthRootResult<T> nthRoot(T x, int n) {
         return result;
     }
     
-    // 负数开偶数次方无实数解
     if (x < 0 && n % 2 == 0) {
         return result;
     }
     
-    // 特殊值
     if (x == 0) {
         result.isInteger = true;
         result.nearestRoot = 0;
@@ -343,29 +336,23 @@ NthRootResult<T> nthRoot(T x, int n) {
         return result;
     }
     
-    // 处理负数情况
     bool isNegative = (x < 0);
     T absX = isNegative ? -x : x;
     
-    // 使用浮点数估算初始值
     double estimate = pow(static_cast<double>(absX), 1.0 / n);
     T root = static_cast<T>(estimate);
     
-    // 从估算值开始向下试根
     T power = safePower(root, n);
     
-    // 如果估算值的幂大于目标值，向下调整
     while (root > 0 && power > absX) {
         root--;
         power = safePower(root, n);
     }
     
-    // 如果估算值的幂小于目标值，向上调整
     while (power < absX) {
         T nextRoot = root + 1;
         T nextPower = safePower(nextRoot, n);
         
-        // 检查溢出
         if (nextPower == std::numeric_limits<T>::max() || nextPower < power) {
             break;
         }
@@ -378,14 +365,12 @@ NthRootResult<T> nthRoot(T x, int n) {
         power = nextPower;
     }
     
-    // 检查当前root和root+1，找最接近的
     T lowerRoot = root;
     T lowerPower = safePower(lowerRoot, n);
     
     T upperRoot = root + 1;
     T upperPower = safePower(upperRoot, n);
     
-    // 检查是否为完全n次方
     if (lowerPower == absX) {
         result.isInteger = true;
         result.nearestRoot = isNegative ? -lowerRoot : lowerRoot;
@@ -398,8 +383,7 @@ NthRootResult<T> nthRoot(T x, int n) {
         return result;
     }
     
-    // 不是完全n次方，找最接近的根
-    // 比较 |absX - lowerPower| 和 |upperPower - absX|
+    // compare |absX - lowerPower| and |upperPower - absX|
     T lowerDiff = absX - lowerPower;
     T upperDiff = (upperPower == std::numeric_limits<T>::max()) ? std::numeric_limits<T>::max() : upperPower - absX;
     

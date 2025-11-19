@@ -31,37 +31,37 @@ void PythonRequestManager::disconnect() {
 bool PythonRequestManager::ensureConnected() {
     
     if (connected_ && persistentSocket_ >= 0) {
-        // 快速检查连接是否还活着
-        // MSG_PEEK: 查看数据但不移除
-        // MSG_DONTWAIT: 非阻塞
+        // Quick check if connection is still alive
+        // MSG_PEEK: Peek data without removing
+        // MSG_DONTWAIT: Non-blocking
         char buf;
         ssize_t n = recv(persistentSocket_, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
         
         if (n == 0) {
-            // 连接已关闭
+            // Connection closed
             std::cout << "[Warning] Connection closed by server" << std::endl;
             close(persistentSocket_);
             persistentSocket_ = -1;
             connected_ = false;
         } else if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // 没有数据，但连接正常
+                // No data but connection is fine
                 return true;
             } else {
-                // 连接出错
+                // Connection error
                 std::cerr << "[Error] Connection error: " << strerror(errno) << std::endl;
                 close(persistentSocket_);
                 persistentSocket_ = -1;
                 connected_ = false;
             }
         } else {
-            // n > 0，有数据（不应该出现，因为我们使用了请求-响应模式）
+            // n > 0, data exists (shouldn't happen in request-response mode)
             std::cerr << "[Warning] Unexpected data on socket" << std::endl;
-            return true;  // 暂时认为连接正常
+            return true;  // Temporarily consider connection OK
         }
     }
     
-    // 需要重新连接
+    // Need to reconnect
     std::cout << "[Info] Establishing new connection..." << std::endl;
     persistentSocket_ = connectToServer();
     if (persistentSocket_ < 0) {
@@ -87,64 +87,64 @@ std::string PythonRequestManager::computeHash(const std::string& params) {
 std::string PythonRequestManager::request(const std::string& params) {
     std::string key = computeHash(params);
     
-    // ===== 第1步：读取缓存（共享锁，允许并发读） =====
+    // ===== Step 1: Read cache (shared lock, allows concurrent reads) =====
     {
         std::shared_lock<std::shared_mutex> lock(cacheMutex_);
-        auto cacheIt = cache_.find(key);  // ✅ 使用明确的变量名
+        auto cacheIt = cache_.find(key);  // Using clear variable names
         if (cacheIt != cache_.end()) {
             return cacheIt->second;
         }
     }
     
-    // ===== 第2步：检查正在处理的请求（先用共享锁查询） =====
+    // ===== Step 2: Check pending requests (first with shared lock) =====
     std::shared_ptr<std::promise<std::string>> myPromise;
     std::future<std::string> myFuture;
     bool isFirstRequest = false;
     
     {
-        // 先用共享锁检查是否存在
+        // First check with shared lock
         std::shared_lock<std::shared_mutex> readLock(requestMutex_);
-        auto pendingIt = pendingRequests_.find(key);  // ✅ 使用明确的变量名
+        auto pendingIt = pendingRequests_.find(key);  // Clear variable naming
         
         if (pendingIt != pendingRequests_.end()) {
-            // ===== 情况A：已有相同请求，升级为独占锁添加等待者 =====
-            readLock.unlock();  // 释放共享锁
+            // ===== Case A: Same request exists, upgrade to exclusive lock to add waiter =====
+            readLock.unlock();  // Release shared lock
             
             std::unique_lock<std::shared_mutex> writeLock(requestMutex_);
             
-            // 双重检查
-            pendingIt = pendingRequests_.find(key);  // ✅ 重新查找
+            // Double check
+            pendingIt = pendingRequests_.find(key);  // Recheck
             if (pendingIt != pendingRequests_.end()) {
                 myPromise = std::make_shared<std::promise<std::string>>();
                 myFuture = myPromise->get_future();
                 pendingIt->second->waiters.push_back(myPromise);
             } else {
-                // 在获取写锁期间，请求已完成，重新查缓存
+                // Request completed while acquiring write lock, check cache again
                 writeLock.unlock();
                 
                 std::shared_lock<std::shared_mutex> cacheLock(cacheMutex_);
-                auto cacheIt = cache_.find(key);  // ✅ 明确是查缓存
+                auto cacheIt = cache_.find(key);  // Explicit cache check
                 if (cacheIt != cache_.end()) {
                     return cacheIt->second;
                 }
-                // 否则继续作为首发者
+                // Otherwise continue as first requester
                 isFirstRequest = true;
             }
         } else {
-            // ===== 情况B：我是第一个，升级为独占锁创建请求 =====
+            // ===== Case B: I'm the first, upgrade to exclusive lock to create request =====
             readLock.unlock();
             
             std::unique_lock<std::shared_mutex> writeLock(requestMutex_);
             
-            // 双重检查
-            pendingIt = pendingRequests_.find(key);  // ✅ 重新查找
+            // Double check
+            pendingIt = pendingRequests_.find(key);  // Recheck
             if (pendingIt == pendingRequests_.end()) {
                 isFirstRequest = true;
                 auto pendingReq = std::make_shared<PendingRequest>();
                 myFuture = pendingReq->promise.get_future();
                 pendingRequests_[key] = pendingReq;
             } else {
-                // 在获取写锁期间，有其他线程创建了请求
+                // Another thread created request while acquiring write lock
                 myPromise = std::make_shared<std::promise<std::string>>();
                 myFuture = myPromise->get_future();
                 pendingIt->second->waiters.push_back(myPromise);
@@ -155,28 +155,27 @@ std::string PythonRequestManager::request(const std::string& params) {
     std::string result;
     
     if (isFirstRequest) {
-        // ===== 执行实际的Python调用 =====
+        // ===== call actual Python =====
         try {
             result = executePythonRequest(params);
             
-            // ===== 存入缓存（独占锁） =====
+            // ===== save cache unique lock =====
             {
                 std::unique_lock<std::shared_mutex> lock(cacheMutex_);
                 cache_[key] = result;
                 cacheOrder_.push(key);
                 
-                // LRU淘汰
+                // LRU
                 while (cache_.size() > cacheLimit_) {
                     std::string oldKey = cacheOrder_.front();
                     cacheOrder_.pop();
                     cache_.erase(oldKey);
                 }
             }
-            
-            // ===== 通知所有等待的线程（独占锁） =====
+            // ===== Notify all waiting threads (exclusive lock) =====
             {
                 std::unique_lock<std::shared_mutex> lock(requestMutex_);
-                auto pendingIt = pendingRequests_.find(key);  // ✅ 明确是查pending
+                auto pendingIt = pendingRequests_.find(key);  //  is pending
                 if (pendingIt != pendingRequests_.end()) {
                     pendingIt->second->promise.set_value(result);
                     for (auto& waiter : pendingIt->second->waiters) {
@@ -187,9 +186,9 @@ std::string PythonRequestManager::request(const std::string& params) {
             }
             
         } catch (const std::exception& e) {
-            // 错误处理
+            // error process
             std::unique_lock<std::shared_mutex> lock(requestMutex_);
-            auto pendingIt = pendingRequests_.find(key);  // ✅ 明确变量名
+            auto pendingIt = pendingRequests_.find(key);  
             if (pendingIt != pendingRequests_.end()) {
                 try {
                     pendingIt->second->promise.set_exception(std::current_exception());
@@ -205,7 +204,7 @@ std::string PythonRequestManager::request(const std::string& params) {
             throw;
         }
     } else {
-        // ===== 等待首发者的结果 =====
+        // ===== wait fir first res =====
         result = myFuture.get();
     }
     
@@ -220,13 +219,13 @@ std::string PythonRequestManager::executePythonRequest(const std::string& params
     }
     
     try {
-        // 发送请求
+        // Send request
         if (!sendData(params)) {
             disconnect();
             throw std::runtime_error("Failed to send data to Python server");
         }
         
-        // 接收响应
+        // Receive response
         std::string response = receiveData();
         
         if (response.empty()) {
@@ -247,22 +246,22 @@ int PythonRequestManager::connectToServer() {
         return -1;
     }
     
-    // 设置超时
+    // Set timeout
     // struct timeval timeout;
-    // timeout.tv_sec = 60;  // 长连接可以设置更长的超时
+    // timeout.tv_sec = 60;  // Long connection can set longer timeout
     // timeout.tv_usec = 0;
     // setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     // setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     
-    // 设置 TCP_NODELAY
+    // Set TCP_NODELAY
     int flag = 1;
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
     
-    // 设置 SO_KEEPALIVE，保持连接活跃
+    // Set SO_KEEPALIVE to keep connection alive
     flag = 1;
     setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag));
     
-    // 连接
+    // Connect
     struct sockaddr_in serverAddr;
     memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
@@ -287,7 +286,7 @@ bool PythonRequestManager::sendData(const std::string& data) {
         std::cerr << "[Error] Attempting to send empty data" << std::endl;
         return false;
     }
-    // ===== 第1步：发送长度 =====
+    // ===== Step 1: Send length =====
     uint32_t length = htonl(data.length());
     size_t totalSent = 0;
     
@@ -305,7 +304,7 @@ bool PythonRequestManager::sendData(const std::string& data) {
         totalSent += sent;
     }
     
-    // ===== 第2步：发送实际数据 =====
+    // ===== Step 2: Send actual data =====
     totalSent = 0;
     while (totalSent < data.length()) {
         ssize_t sent = send(persistentSocket_, 
@@ -324,11 +323,11 @@ bool PythonRequestManager::sendData(const std::string& data) {
 }
 
 std::string PythonRequestManager::receiveData() {
-    // ===== 第1步：接收4字节的长度字段 =====
+    // Step 1: Receive 4-byte length field
     uint32_t length;
     size_t totalReceived = 0;
     
-    // 确保收到完整的4字节
+    // Ensure complete 4 bytes are received
     while (totalReceived < sizeof(length)) {
         ssize_t received = recv(persistentSocket_, 
                                reinterpret_cast<char*>(&length) + totalReceived,
@@ -347,19 +346,19 @@ std::string PythonRequestManager::receiveData() {
         totalReceived += received;
     }
     
-    length = ntohl(length);  // 网络字节序转本地字节序
+    length = ntohl(length);  // Convert network byte order to host byte order
     
-    // 检查长度合理性（防止异常数据）
+    // Validate length (prevent abnormal data)
     if (length == 0) {
         std::cerr << "[Error] Received zero length" << std::endl;
         return "";
     }
-    if (length > 10 * 1024 * 1024) {  // 假设最大10MB
+    if (length > 10 * 1024 * 1024) {  // Assume maximum 10MB
         std::cerr << "[Error] Received unreasonable length: " << length << std::endl;
         return "";
     }
     
-    // ===== 第2步：接收实际数据 =====
+    // Step 2: Receive actual data
     std::string data;
     data.resize(length);
     totalReceived = 0;
@@ -388,7 +387,7 @@ std::string PythonRequestManager::receiveData() {
 }
 
 void PythonRequestManager::clearCache() {
-    std::unique_lock<std::shared_mutex> lock(cacheMutex_);  // ✅ 独占锁
+    std::unique_lock<std::shared_mutex> lock(cacheMutex_);  // Exclusive lock
     cache_.clear();
     while (!cacheOrder_.empty()) {
         cacheOrder_.pop();
