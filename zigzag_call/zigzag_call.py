@@ -340,6 +340,7 @@ def handle_client(client_socket,address):
                 print(f"[Info] Request: {request}",flush=True)
 
                 log_path=Path(__file__).parent / 'log' / f'{address[1]}.log'
+                log_path.parent.mkdir(parents=True, exist_ok=True)
                 try:
                     log_file=open(log_path,'w')
                     sys.stdout = log_file

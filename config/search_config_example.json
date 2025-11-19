@@ -3,6 +3,7 @@
     "req_generator_input_length_path": "../config/sharegpt_input_token_lens.json",
     "req_generator_output_length_path": "../config/sharegpt_output_token_lens.json",
     "req_gen_mode": "fixed",
+    "is_chunked_prefill": false,
     "req_number": 30,
     "req_prefill_number": 4,
     "req_decode_number": 0,

@@ -17,6 +17,11 @@
 #include <thread>
 #include <mutex>
 #include <functional>
+#include <shared_mutex>
+#include <map>
+#include <cmath>
+#include <limits>
+#include <type_traits>
 
 #define KB *(int64_t)1024
 #define MB *(int64_t)1024 KB
@@ -207,5 +212,204 @@ private:
     static inline unsigned int global_seed = 42; // Default seed
     static inline std::mutex seed_mutex;
 };
+
+template <typename K, typename V>
+class ThreadSafeMap {
+public:
+    ThreadSafeMap() = default;
+    ~ThreadSafeMap() = default;
+
+    ThreadSafeMap(const ThreadSafeMap&) = delete;
+    ThreadSafeMap& operator=(const ThreadSafeMap&) = delete;
+
+
+    void set(const K& key, const V& value) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        map_[key] = value;
+    }
+
+
+    std::optional<V> get(const K& key) const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        auto it = map_.find(key);
+        if (it != map_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    void erase(const K& key) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        map_.erase(key);
+    }
+
+    size_t size() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return map_.size();
+    }
+
+    bool empty() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return map_.empty();
+    }
+
+    void clear() {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        map_.clear();
+    }
+
+private:
+    std::map<K, V> map_;
+    mutable std::shared_mutex mutex_;
+};
+
+// 结构体用于返回结果
+template<typename T>
+struct NthRootResult {
+    bool isInteger;      // 是否为完全n次方
+    T nearestRoot;       // 最接近的整数根
+};
+
+// 计算 base 的 n 次方，带溢出检测
+template<typename T>
+T safePower(T base, int n) {
+    static_assert(std::is_integral<T>::value, "T must be an integral type");
+    
+    if (n == 0) return 1;
+    if (base == 0) return 0;
+    if (base == 1) return 1;
+    if (base == -1) return (n % 2 == 0) ? 1 : -1;
+    
+    T result = 1;
+    T absBase = (base < 0) ? -base : base;
+    
+    for (int i = 0; i < n; i++) {
+        // 检查是否会溢出
+        if (result > std::numeric_limits<T>::max() / absBase) {
+            return std::numeric_limits<T>::max(); // 返回最大值表示溢出
+        }
+        result *= absBase;
+    }
+    
+    // 如果base是负数且n是奇数，结果为负
+    if (base < 0 && n % 2 == 1) {
+        result = -result;
+    }
+    
+    return result;
+}
+
+// 使用试根法计算n次方根
+template<typename T>
+NthRootResult<T> nthRoot(T x, int n) {
+    static_assert(std::is_integral<T>::value, "T must be an integral type");
+    
+    NthRootResult<T> result;
+    result.isInteger = false;
+    result.nearestRoot = 0;
+    
+    // 边界情况处理
+    if (n <= 0) {
+        return result;
+    }
+    
+    if (n == 1) {
+        result.isInteger = true;
+        result.nearestRoot = x;
+        return result;
+    }
+    
+    // 负数开偶数次方无实数解
+    if (x < 0 && n % 2 == 0) {
+        return result;
+    }
+    
+    // 特殊值
+    if (x == 0) {
+        result.isInteger = true;
+        result.nearestRoot = 0;
+        return result;
+    }
+    
+    if (x == 1) {
+        result.isInteger = true;
+        result.nearestRoot = 1;
+        return result;
+    }
+    
+    if (x == -1 && n % 2 == 1) {
+        result.isInteger = true;
+        result.nearestRoot = -1;
+        return result;
+    }
+    
+    // 处理负数情况
+    bool isNegative = (x < 0);
+    T absX = isNegative ? -x : x;
+    
+    // 使用浮点数估算初始值
+    double estimate = pow(static_cast<double>(absX), 1.0 / n);
+    T root = static_cast<T>(estimate);
+    
+    // 从估算值开始向下试根
+    T power = safePower(root, n);
+    
+    // 如果估算值的幂大于目标值，向下调整
+    while (root > 0 && power > absX) {
+        root--;
+        power = safePower(root, n);
+    }
+    
+    // 如果估算值的幂小于目标值，向上调整
+    while (power < absX) {
+        T nextRoot = root + 1;
+        T nextPower = safePower(nextRoot, n);
+        
+        // 检查溢出
+        if (nextPower == std::numeric_limits<T>::max() || nextPower < power) {
+            break;
+        }
+        
+        if (nextPower > absX) {
+            break;
+        }
+        
+        root = nextRoot;
+        power = nextPower;
+    }
+    
+    // 检查当前root和root+1，找最接近的
+    T lowerRoot = root;
+    T lowerPower = safePower(lowerRoot, n);
+    
+    T upperRoot = root + 1;
+    T upperPower = safePower(upperRoot, n);
+    
+    // 检查是否为完全n次方
+    if (lowerPower == absX) {
+        result.isInteger = true;
+        result.nearestRoot = isNegative ? -lowerRoot : lowerRoot;
+        return result;
+    }
+    
+    if (upperPower == absX) {
+        result.isInteger = true;
+        result.nearestRoot = isNegative ? -upperRoot : upperRoot;
+        return result;
+    }
+    
+    // 不是完全n次方，找最接近的根
+    // 比较 |absX - lowerPower| 和 |upperPower - absX|
+    T lowerDiff = absX - lowerPower;
+    T upperDiff = (upperPower == std::numeric_limits<T>::max()) ? std::numeric_limits<T>::max() : upperPower - absX;
+    
+    if (lowerDiff <= upperDiff) {
+        result.nearestRoot = isNegative ? -lowerRoot : lowerRoot;
+    } else {
+        result.nearestRoot = isNegative ? -upperRoot : upperRoot;
+    }
+    
+    return result;
+}
 
 #endif // UTIL_H

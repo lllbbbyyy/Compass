@@ -108,3 +108,5 @@ Obtain the optimal mapping results for each service policy and hardware under a 
 ```
 python3 get_res.py <seq length distri>
 ```
+
+It is worth noting that calling directly through the zigzag library will generate a large number of intermediate evaluation results, which may cause the experiment to run slowly. We recommend manually cloning the zigzag source code into the zigzag_call directory and modifying it to only output the final result JSON file.

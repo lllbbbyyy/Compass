@@ -16,7 +16,6 @@
 #include "layer.h"
 #include "util.h"
 
-
 class CoreMapper{
 public:
 	typedef ConvLayer::Workload ConvParent;
@@ -68,6 +67,40 @@ public:
 	virtual CoreMapping genMapping(const ConvWl& wl) const = 0;
 
 	virtual ~CoreMapper() = default;
+};
+
+class ZigzagMapper: public CoreMapper{
+	std::shared_ptr<PolarCore> core;
+	std::string core_type;
+
+public:
+	ZigzagMapper(std::shared_ptr<PolarCore> _core, const std::string& _core_type);
+
+	virtual void set_conv_utime(ConvLayer& l) const override;
+
+	virtual CoreMapping genMapping(const ConvWl& wl) const override;
+};
+
+class WSMapper: public CoreMapper{
+	std::shared_ptr<PolarCore> core;
+
+public:
+	WSMapper(std::shared_ptr<PolarCore> _core);
+
+	virtual void set_conv_utime(ConvLayer& l) const override;
+
+	virtual CoreMapping genMapping(const ConvWl& wl) const override;
+};
+
+class OSMapper: public CoreMapper{
+	std::shared_ptr<PolarCore> core;
+
+public:
+	OSMapper(std::shared_ptr<PolarCore> _core);
+
+	virtual void set_conv_utime(ConvLayer& l) const override;
+
+	virtual CoreMapping genMapping(const ConvWl& wl) const override;
 };
 
 class PolarMapper: public CoreMapper{

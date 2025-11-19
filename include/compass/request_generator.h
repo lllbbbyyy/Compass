@@ -61,6 +61,9 @@ public:
     batchedReqs_t generateReq(int micro_batch_size);
     batchedReqs_t generateReq(int micro_batch_size,int num_prefill, int num_decode);
 
+    int getNextInputLength();
+    int getNextOutputLength();
+
 private:
     int now_id;
     std::vector<std::pair<int, std::optional<Req>>> req_cache;
@@ -73,8 +76,6 @@ private:
     size_t output_index;
 
     void warmupGenerate();
-    int getNextInputLength();
-    int getNextOutputLength();
 };
 
 #endif // COMPASS_REQUEST_GENERATOR_H

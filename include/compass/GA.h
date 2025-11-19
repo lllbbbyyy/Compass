@@ -98,7 +98,7 @@ public:
 
     void random_run();
 
-    std::tuple<cycle_t, energy_t, mc_t> get_best_res();
+    std::tuple<cycle_t, energy_t, double, mc_t> get_best_res();
 
     void save_latency_detail(const std::string &filename);
 

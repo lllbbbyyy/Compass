@@ -1,3 +1,6 @@
+#ifndef DEBUG_H
+#define DEBUG_H
+
 #include<iostream>
 
 #define DEBUG_ENABLE
@@ -20,3 +23,5 @@
         do { \
         } while (0)
 #endif
+
+#endif // DEBUG_H
