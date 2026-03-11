@@ -136,7 +136,7 @@ for s in scale:
                 json.dump(config, f, indent=4)
 
             with open(dir+'exp_out.log', "w") as outfile:
-                subprocess.run(['python3','test1.py', dir, w, str(s)], 
+                subprocess.run(['python3','bo.py', dir, w, str(s)], 
                 check=True, stdout=outfile, stderr=outfile)
             
             exec_file=dir+'exec.sh'
