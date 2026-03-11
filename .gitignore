@@ -14,3 +14,4 @@ exp_compare/
 exp*/
 try/
 dse*.csv
+zigzag_call/*.pkl
