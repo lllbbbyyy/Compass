@@ -1173,8 +1173,8 @@ CoreMapper::CoreMapping WSMapper::genMapping(const ConvWl &wl) const
     return cost;
 }
 
-ZigzagMapper::ZigzagMapper(std::shared_ptr<PolarCore> _core, const std::string& _core_type)
-	: CoreMapper(_core), core(_core), core_type(_core_type) {}
+ZigzagMapper::ZigzagMapper(std::shared_ptr<PolarCore> _core, const std::string& _core_type, const std::string& _macs)
+	: CoreMapper(_core), core(_core), core_type(_core_type), macs_str(_macs) {}
 
 void ZigzagMapper::set_conv_utime(ConvLayer &l) const
 {
@@ -1216,21 +1216,37 @@ CoreMapper::CoreMapping ZigzagMapper::genMapping(const ConvWl &wl) const
 		{"ascend", {8,8,1,1}},
 		{"tpu", {1,1}},
 	};
+	MacVector macs;
+	auto total_mac=core->pes.vecSize*core->pes.laneNum*pex_num*pey_num;
 
-	auto mac_map=arch_mac_map.at(core_type);
+	if(!macs_str.empty()){
+		auto j = nlohmann::json::parse(macs_str);
+		macs = j.get<MacVector>();
+	}
+	else{
+		auto mac_map=arch_mac_map.at(core_type);  
+		int prod_mac=1;
+		for(auto m : mac_map){
+			prod_mac*=m;
+		}
+		assert(total_mac % prod_mac == 0);
+		auto per_res=nthRoot(total_mac / prod_mac,mac_map.size());
+		if(!per_res.isInteger){
+			std::cerr<<total_mac/prod_mac<<" is not a perfect "<<mac_map.size()<<"-th power, cannot find integer mac configuration for "<<core_type<<std::endl;
+			exit(1);
+		}
+		assert(per_res.isInteger);
+		auto per_mac=per_res.nearestRoot;
+		for (size_t i=0;i<mac_map.size();i++){
+			macs.push_back(per_mac*mac_map[i]);
+		}
+	}
+	//check 
 	int prod_mac=1;
-	for(auto m : mac_map){
+	for(auto m : macs){
 		prod_mac*=m;
 	}
-	auto total_mac=core->pes.vecSize*core->pes.laneNum*pex_num*pey_num;
-	assert(total_mac % prod_mac == 0);
-	auto per_res=nthRoot(total_mac / prod_mac,mac_map.size());
-	assert(per_res.isInteger);
-	auto per_mac=per_res.nearestRoot;
-	MacVector macs;
-	for (size_t i=0;i<mac_map.size();i++){
-		macs.push_back(per_mac*mac_map[i]);
-	}
+	assert(prod_mac == total_mac);
 
 	auto [m_min ,k_min,n_min]=arch_min_map.at(core_type)(macs);
 
@@ -1243,7 +1259,7 @@ CoreMapper::CoreMapping ZigzagMapper::genMapping(const ConvWl &wl) const
 	std::string params="{\"m\":"+std::to_string(M)+",\"k\":"+std::to_string(K)+",\"n\":"+std::to_string(N)+",\"arch\":\""+core_type+"\",\"mac\":[";
 	for (size_t i=0;i<macs.size();i++){
 		params+=std::to_string(macs[i]);
-		if(i+1<mac_map.size()) params+=",";
+		if(i+1<macs.size()) params+=",";
 	}
 	params+="],\"buf\":"+std::to_string(core->ul3.Size)+"}";
 

@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 import shutil
-from zigzag.api import get_hardware_performance_zigzag
 import socket
 import json
 import hashlib
@@ -18,6 +17,7 @@ import signal
 import logging
 
 from zigzag_template import workload_template,hardware_template,mapping_template
+from zigzag_update import get_hardware_performance_zigzag
 
 class PersistentLRUCache:
     """LRU cache with disk persistence"""

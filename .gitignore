@@ -10,3 +10,7 @@ exp_why_1/
 __pycache__/
 grid_search.py 
 DSE_hardware/
+exp_compare/
+exp*/
+try/
+dse*.csv

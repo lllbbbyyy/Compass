@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
 	inFile >> j;
 
 	// read config
-	size_t init_chip_number = j["num_chiplets"];
+	int init_chip_number = j["num_chiplets"];
 	int batch_size = config_j["batch_size"];
 	int micro_batch_size = 1;
 	if(config_j.contains("micro_batch")){
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 	}
 
 	auto &chips_info = j["chiplets"];
-	assert(chips_info.size() == init_chip_number);
+	assert((int)chips_info.size() == init_chip_number);
 
 	vector<shared_ptr<CoreMapper>> chips;
 	for (const auto &chip_info : chips_info)
@@ -106,6 +106,10 @@ int main(int argc, char *argv[])
 		vol_t buffer_size = chip_info["buffer_size"];
 		buffer_size = buffer_size KB;
 		int compute_units = chip_info["compute_units"];
+		string macs="";
+		if(chip_info.contains("macs")){
+			macs=chip_info["macs"];
+		}
 		if (chip_type == "NVDLA")
 		{
 			chips.emplace_back(createPolarCoreMapper(compute_units, buffer_size));
@@ -116,13 +120,22 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			chips.emplace_back(createPolarCoreMapper(compute_units, buffer_size,chip_type));
+			chips.emplace_back(createPolarCoreMapper(compute_units, buffer_size,chip_type,macs));
 		}
 	}
 
 	DEBUG("chips created");
 
-	auto [chip_x, chip_y] = closest_factors(init_chip_number);
+	int chip_x, chip_y;
+	if(j.contains("chip_x")&&j.contains("chip_y")){
+		chip_x=j["chip_x"];
+		chip_y=j["chip_y"];
+		assert(chip_x*chip_y==init_chip_number);
+	}
+	else{
+		tie(chip_x, chip_y) = closest_factors(init_chip_number);
+	}
+
 	DEBUG("chiplet number", init_chip_number, chip_x, chip_y);
 	bw_t nop_bw = j["nop_bw"];
 	bw_t dram_bw = j["dram_bw"];

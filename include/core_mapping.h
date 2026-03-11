@@ -72,9 +72,10 @@ public:
 class ZigzagMapper: public CoreMapper{
 	std::shared_ptr<PolarCore> core;
 	std::string core_type;
+	std::string macs_str;
 
 public:
-	ZigzagMapper(std::shared_ptr<PolarCore> _core, const std::string& _core_type);
+	ZigzagMapper(std::shared_ptr<PolarCore> _core, const std::string& _core_type, const std::string& _macs);
 
 	virtual void set_conv_utime(ConvLayer& l) const override;
 

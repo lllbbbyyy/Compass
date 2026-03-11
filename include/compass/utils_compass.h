@@ -24,7 +24,7 @@ std::shared_ptr<CoreMapper>
 createEyerissCoreMapper(int mac_num, vol_t ubufSize);
 
 std::shared_ptr<CoreMapper>
-createPolarCoreMapper(int mac_num, vol_t ubufSize,std::string mapping="");
+createPolarCoreMapper(int mac_num, vol_t ubufSize,std::string mapping="",std::string macs="");
 
 std::shared_ptr<NoC>
 createNoC(mlen_t xlen, mlen_t ylen,

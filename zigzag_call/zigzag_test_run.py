@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 import shutil
-from zigzag.api import get_hardware_performance_zigzag
+from zigzag_update import get_hardware_performance_zigzag
 
 name='ascend'
 

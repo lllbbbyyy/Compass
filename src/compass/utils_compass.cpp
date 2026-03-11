@@ -97,7 +97,7 @@ createEyerissCoreMapper(int mac_num, vol_t ubufSize) {
 }
 
 std::shared_ptr<CoreMapper>
-createPolarCoreMapper(int mac_num, vol_t ubufSize, std::string mapping) {
+createPolarCoreMapper(int mac_num, vol_t ubufSize, std::string mapping,std::string macs) {
     assert(mac_num%(pex_num*pey_num)==0);
     auto [vector_len, lane_len] = closest_factors(mac_num/(pex_num*pey_num));
 
@@ -153,7 +153,7 @@ createPolarCoreMapper(int mac_num, vol_t ubufSize, std::string mapping) {
         PolarCore::Buffers{ al1, wl1, ol1, al2, wl2, ol2, ul3 });
 
     if (mapping.length() != 0) {
-        return std::make_shared<ZigzagMapper>(core,mapping);
+        return std::make_shared<ZigzagMapper>(core,mapping,macs);
     }
     return std::make_shared<PolarMapper>(core);
 }

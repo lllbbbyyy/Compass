@@ -104,8 +104,8 @@ memories:
           - I1, tl
       - name: w_port_1
         type: write
-        bandwidth_min: 64
-        bandwidth_max: 64
+        bandwidth_min: 256
+        bandwidth_max: 256
         allocation: 
           - I1, fh
     served_dimensions: [D3, D4]
