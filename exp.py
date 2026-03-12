@@ -126,7 +126,7 @@ for s in scale:
                 json.dump(config, f, indent=4)
             # create exec config
             config['seed']+=1
-            config['req_number']=300
+            config['req_number']*=10
             config['run_mode']='exec'
             config['detail_latency_save_path']='./exec_latency_detail.json'
             config['detail_energy_save_path']='./exec_energy_detail.json'

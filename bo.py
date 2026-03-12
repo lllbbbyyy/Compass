@@ -45,10 +45,18 @@ HETERO_DIRECTORY = BASE_DIRECTORY / "hetero_phase/"
 COMPASS_CONFIG_PATH = NOW_DIR / base_dir_str / "compass_config_search.json"
 
 # 创建所需的全部数据目录
-for d in [HETERO_DIRECTORY, HETERO_DIRECTORY / "hardware_params", HETERO_DIRECTORY / "search_out", HETERO_DIRECTORY / "search_log"]:
+for d in [
+    HETERO_DIRECTORY, 
+    HETERO_DIRECTORY / "hardware_params", 
+    HETERO_DIRECTORY / "search_out", 
+    HETERO_DIRECTORY / "search_log",
+    HETERO_DIRECTORY / "exec_out", 
+    ]:
     os.makedirs(d, exist_ok=True)
 
 COMPASS_RUN_CMD = NOW_DIR / "build/compass"
+
+LOG_FILE_PATH = HETERO_DIRECTORY / "dse_optimization_log.csv"
 
 # --- 1.2 解析微批次参数/任务类型 (sys.argv[2]) ---
 micro_batch_options = [] # 默认 decode
@@ -112,8 +120,8 @@ CONFIG = {
         'num_types': len(chip_type_list),       # 芯粒种类数量 (0=小, 1=中, 2=大)
     },
     'BO': {
-        'init_samples': 5,    # 初始随机采样评估的次数 (冷启动)
-        'iterations': 95,     # 贝叶斯优化主循环总迭代次数
+        'init_samples': 10,    # 初始随机采样评估的次数 (冷启动)
+        'iterations': 90,     # 贝叶斯优化主循环总迭代次数
         'gp_train_steps': 20, # 每次获得新数据后，GP 模型参数的训练步数
         'gp_lr': 0.1,         # GP 模型 Adam 优化器的学习率
     },
@@ -162,9 +170,7 @@ def get_chiplet_spec(chip_type_idx,chip_size):
         "macs": macs_list[chip_type_idx][chip_size]
     }
 
-def CompassSimulator(x_tensor):
-    global LOG_ID_COUNTER, SIMULATOR_CACHE
-    
+def parse_tensor_to_config(x_tensor):
     x = x_tensor.detach().cpu().squeeze()
     chip_size= int(round(x[0].item() * (len(SEARCH_SPACE['SHAPE_LIST']) - 1)))
     H, W = parse_shape(x[0].item())
@@ -195,6 +201,12 @@ def CompassSimulator(x_tensor):
         "micro_batch": real_sys_vals['micro_batch'],
         "chiplets": chiplets
     }
+    return config
+
+def CompassSimulator(x_tensor):
+    global LOG_ID_COUNTER, SIMULATOR_CACHE
+    
+    config = parse_tensor_to_config(x_tensor)
     
     # Hash 缓存检查
     config_str = json.dumps(config, sort_keys=True)
@@ -434,13 +446,13 @@ def run_hierarchical_bo():
     print(f"--- 启动分层芯粒架构 DSE (动态系统维度: {NUM_SYS_VARS}) ---")
     
     # 初始化 CSV 日志
-    log_filename = "dse_optimization_log.csv"
+    
     sys_keys = list(SEARCH_SPACE['SYS_PARAMS'].keys())
     num_types = CONFIG['CHIPLET']['num_types']
     count_keys = [f'Type_{i}_Count' for i in range(num_types)]
     fieldnames = ['Iter', 'H', 'W'] + sys_keys + count_keys + ['Cost']
     
-    with open(log_filename, mode='w', newline='') as f:
+    with open(LOG_FILE_PATH, mode='w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
     
@@ -471,8 +483,8 @@ def run_hierarchical_bo():
         y = CompassSimulator(train_x[i:i+1]).to(device)
         train_y_list.append(y)
         
-        log_data = parse_tensor_for_logging(train_x[i:i+1], y.item(), 'Init', num_types)
-        with open(log_filename, mode='a', newline='') as f:
+        log_data = parse_tensor_for_logging(train_x[i:i+1], y.item(), 'Init '+str(i), num_types)
+        with open(LOG_FILE_PATH, mode='a', newline='') as f:
             csv.DictWriter(f, fieldnames=fieldnames).writerow(log_data)
             
     train_y = torch.cat(train_y_list)
@@ -504,8 +516,8 @@ def run_hierarchical_bo():
         train_x = torch.cat([train_x, best_next_x])
         train_y = torch.cat([train_y, new_y])
 
-        log_data = parse_tensor_for_logging(best_next_x, new_y.item(), iteration + 1, num_types)
-        with open(log_filename, mode='a', newline='') as f:
+        log_data = parse_tensor_for_logging(best_next_x, new_y.item(), iteration + CONFIG['BO']['init_samples'], num_types)
+        with open(LOG_FILE_PATH, mode='a', newline='') as f:
             csv.DictWriter(f, fieldnames=fieldnames).writerow(log_data)
 
         current_global_best = train_y.min().item()
@@ -515,18 +527,19 @@ def run_hierarchical_bo():
 
     best_idx = torch.argmin(train_y)
     best_config = train_x[best_idx].cpu().squeeze()
+    best_config_json = parse_tensor_to_config(train_x[best_idx])
     
     print("\n" + "="*40)
     print(" 🏆 探索完成 - 发现最优芯片架构 🏆")
     print("="*40)
     print(f"最低评估代价 (latency*energy*mc): {train_y[best_idx].item():.6f}\n")
     
-    H_best, W_best = int(best_config[0].item()), int(best_config[1].item())
+    H_best, W_best = parse_shape(best_config[0].item())
     print(f"[系统级宏观配置]")
     print(f"  ▸ 阵列尺寸: {H_best}x{W_best}")
     
     for i, (param_name, candidate_list) in enumerate(SEARCH_SPACE['SYS_PARAMS'].items()):
-        norm_val = best_config[2 + i].item()
+        norm_val = best_config[1 + i].item()
         real_idx = int(round(norm_val * (len(candidate_list) - 1)))
         print(f"  ▸ {param_name}: {candidate_list[real_idx]}")
     
@@ -539,7 +552,11 @@ def run_hierarchical_bo():
             row_str.append(str(chip_type))
         print("  [" + "  ".join(row_str) + "]")
         
-    print(f"\n[*] 寻优轨迹已完整保存至: {os.path.abspath(log_filename)}")
+    print(f"\n[*] 寻优轨迹已完整保存至: {os.path.abspath(LOG_FILE_PATH)}")
+
+    with open(HETERO_DIRECTORY / f"best_hetero_hardware.json", "w") as f:
+        json.dump(best_config_json, f, indent=2)
+    print("\n[*] 已保存最优配置的 JSON 文件...")
 
 if __name__ == "__main__":
     run_hierarchical_bo()
