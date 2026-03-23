@@ -17,7 +17,8 @@ from tqdm import tqdm
 # ==========================================
 # 0. 全局环境、设备设定
 # ==========================================
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+print(device)
 
 def set_global_seed(seed):
     """固定所有随机种子以保证实验的严格可复现性"""
@@ -80,6 +81,12 @@ macs_list=[
     ["[16,16,2,2]","[16,16,4,4]","[32,32,4,4]"],#ascend
     ["[32,8,4]","[64,8,8]","[128,16,8]"]#tesla
 ]
+chip_type_list=["ws","os"]
+macs_list=[
+    ["[4,4,8,8]","[8,8,8,8]","[8,8,16,16]"],#tpu
+    ["[4,4,8,8]","[8,8,8,8]","[8,8,16,16]"],#ascend
+]
+
 shape_list=[]
 if len(sys.argv) >= 4:
     scale_val = int(sys.argv[3])
@@ -108,7 +115,8 @@ SEARCH_SPACE = {
     'SYS_PARAMS': {
         'dram_bw': [16,32,64,128,256], # DRAM 带宽
         'nop_bw': [32,64,128,256,512],       # NoC 网络带宽
-        'micro_batch': micro_batch_options                
+        'micro_batch': micro_batch_options,
+        'tensor_parall':[4,8,16,32,64]
     }
 }
 
@@ -199,6 +207,7 @@ def parse_tensor_to_config(x_tensor):
         "nop_bw": real_sys_vals['nop_bw'],
         "dram_bw": real_sys_vals['dram_bw'],
         "micro_batch": real_sys_vals['micro_batch'],
+        "tensor_parall": real_sys_vals['tensor_parall'],
         "chiplets": chiplets
     }
     return config
@@ -267,35 +276,51 @@ class HierarchicalCompositeKernel(gpytorch.kernels.Kernel):
     def variance_arch(self): return torch.nn.functional.softplus(self.raw_variance_arch)
 
     def forward(self, x1, x2, diag=False, **kwargs):
+        # 1. 提取系统级参数 (现在 0:TENSOR_OFFSET 完美囊括了 shape_idx 和所有的 sys_norms)
         sys_x1, sys_x2 = x1[:, 0:TENSOR_OFFSET], x2[:, 0:TENSOR_OFFSET]
         K_sys = self.sys_kernel(sys_x1, sys_x2, diag=diag)
         
+        # 2. 提取架构级布局张量
         arch_x1, arch_x2 = x1[:, TENSOR_OFFSET:], x2[:, TENSOR_OFFSET:]
         
+        # 获取芯粒种类数量 (依赖全局配置，例如 3)
+        num_types = CONFIG['CHIPLET']['num_types']
+        
+        # 获取曼哈顿距离的指数衰减权重矩阵
+        weights = torch.exp(-self.lengthscale_arch * self.dist_matrix.to(x1.device))
+        
+        # ==========================================
+        # 核心优化：One-Hot + Einsum 降维打击
+        # ==========================================
+        # 过滤掉无效的占位符坑位 (-1)
+        valid_mask1 = (arch_x1 != -1).float()
+        valid_mask2 = (arch_x2 != -1).float()
+        
+        # 转换为 One-Hot 编码矩阵 (形状变成: [N, MAX_L, num_types])
+        # clamp(min=0) 只是为了防止把 -1 传给 one_hot 导致底层报错，反正在下一步就会被 mask 乘成 0
+        O1 = torch.nn.functional.one_hot(arch_x1.clamp(min=0).long(), num_classes=num_types).float()
+        O2 = torch.nn.functional.one_hot(arch_x2.clamp(min=0).long(), num_classes=num_types).float()
+        
+        # 屏蔽无效坑位的 One-Hot 向量
+        O1 = O1 * valid_mask1.unsqueeze(-1)
+        O2 = O2 * valid_mask2.unsqueeze(-1)
+        
         if diag:
-            indicator = (arch_x1.unsqueeze(-1) == arch_x1.unsqueeze(-2)).float()
-            valid_mask = (arch_x1 != -1).float()
-            valid_pair = valid_mask.unsqueeze(-1) * valid_mask.unsqueeze(-2)
-            indicator = indicator * valid_pair
-            weights = torch.exp(-self.lengthscale_arch * self.dist_matrix.to(x1.device))
-            K_arch_diag = self.variance_arch * torch.sum(indicator * weights, dim=(-2, -1))
+            # diag=True 时只需要计算对角线（自己和自己的协方差），直接返回一维向量 [N]
+            K_arch_diag_val = torch.einsum('ikt, kl, ilt -> i', O1, weights, O1)
+            K_arch_diag = self.variance_arch * K_arch_diag_val
             return K_sys * (1.0 + K_arch_diag)
             
+        # 3. 非对角线情况：利用 Einsum 高速矩阵收缩，避免 4D 广播，直接算出 [N1, N2] 矩阵
+        K_arch_val = torch.einsum('ikt, kl, jlt -> ij', O1, weights, O2)
+        
+        # 4. 强制宏观形状匹配过滤 (对齐你的降维逻辑)
+        # 只要 x1 和 x2 在 shape_idx (即 x[:, 0]) 上不一样，它们之间的局部架构相似度 K_arch_val 就被强制清零
         shape_match = (x1[:, 0].unsqueeze(1) == x2[:, 0].unsqueeze(0)).float()
         match_mask = shape_match
 
-        x1_exp = arch_x1.unsqueeze(1).unsqueeze(-1) 
-        x2_exp = arch_x2.unsqueeze(0).unsqueeze(-2) 
-        indicator = (x1_exp == x2_exp).float()
+        K_arch = self.variance_arch * K_arch_val * match_mask 
         
-        valid_mask1 = (arch_x1 != -1).float().unsqueeze(1).unsqueeze(-1)
-        valid_mask2 = (arch_x2 != -1).float().unsqueeze(0).unsqueeze(-2)
-        valid_pair_mask = valid_mask1 * valid_mask2
-        indicator = indicator * valid_pair_mask
-        weights = torch.exp(-self.lengthscale_arch * self.dist_matrix.to(x1.device))
-        
-        K_arch = self.variance_arch * torch.sum(indicator * weights, dim=(-2, -1))
-        K_arch = K_arch * match_mask 
         return K_sys * (1.0 + K_arch)
 
 class HierarchicalGPModel(gpytorch.models.ExactGP):

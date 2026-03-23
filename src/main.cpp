@@ -95,6 +95,14 @@ int main(int argc, char *argv[])
 	else if(j.contains("micro_batch")){
 		micro_batch_size = j["micro_batch"];
 	}
+	if(j.contains("tensor_parall")){
+		int tensor_parall=j["tensor_parall"];
+		int d_model=config_j["model_info"]["d_model"];
+		int d_ffn=config_j["model_info"]["d_ffn"];
+		config_j["model_info"]["d_model_tiling_size"]=d_model/tensor_parall;
+		config_j["model_info"]["d_ffn_tiling_size"]=d_ffn/tensor_parall;
+		DEBUG("tensor_parall: ", tensor_parall);
+	}
 
 	auto &chips_info = j["chiplets"];
 	assert((int)chips_info.size() == init_chip_number);

@@ -194,6 +194,7 @@ mc_t CompassModelEngine::calcMonetaryCost() {
         double D2D_area=4*NoP_len_per_core * NoP_wid;
         double die_area=core_area+D2D_area;
         die_area*= (control_unit_prop * DFT_prop);
+        assert(die_area < 858 mm2);
         compute_die_area+=die_area;
         compute_dir_areas.push_back(die_area);
     }

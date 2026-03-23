@@ -47,9 +47,8 @@ config_template={
 }
 
 dataset=['sharegpt','govreport']
-workload=['decode','prefill']
+workload=['prefill','decode']
 scale=[72,512,2048]
-scale=[512,2048,64]
 
 workload_req_info={
     'prefill':{
