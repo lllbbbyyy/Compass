@@ -75,12 +75,12 @@ if len(sys.argv) >= 3:
 per_chip_macs=[1024,4096,16384]
 per_chip_buffer=[2048,8192,32768]
 
-chip_type_list=["tpu","ascend","tesla"]
-macs_list=[
-    ["[32,32]","[64,64]","[128,128]"],#tpu
-    ["[16,16,2,2]","[16,16,4,4]","[32,32,4,4]"],#ascend
-    ["[32,8,4]","[64,8,8]","[128,16,8]"]#tesla
-]
+# chip_type_list=["tpu","ascend","tesla"]
+# macs_list=[
+#     ["[32,32]","[64,64]","[128,128]"],#tpu
+#     ["[16,16,2,2]","[16,16,4,4]","[32,32,4,4]"],#ascend
+#     ["[32,8,4]","[64,8,8]","[128,16,8]"]#tesla
+# ]
 chip_type_list=["ws","os"]
 macs_list=[
     ["[4,4,8,8]","[8,8,8,8]","[8,8,16,16]"],#tpu
@@ -579,7 +579,7 @@ def run_hierarchical_bo():
         
     print(f"\n[*] 寻优轨迹已完整保存至: {os.path.abspath(LOG_FILE_PATH)}")
 
-    with open(HETERO_DIRECTORY / f"best_hetero_hardware.json", "w") as f:
+    with open(HETERO_DIRECTORY / f"best_hardware.json", "w") as f:
         json.dump(best_config_json, f, indent=2)
     print("\n[*] 已保存最优配置的 JSON 文件...")
 

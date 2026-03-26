@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
 	if (argc != 4)
 	{
 		std::cerr << "Usage: " << argv[0] << " <config_json_file> <input_json_file> <res_csv_file>" << std::endl;
+		std::cerr << "Need " <<3<<" arguments, but got "<<argc-1<<std::endl;
 		return 1;
 	}
 

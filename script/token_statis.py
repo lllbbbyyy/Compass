@@ -2,8 +2,8 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-input_file = '../config/govreport_input_token_lens.json'
-output_file = '../config/govreport_output_token_lens.json'
+input_file = '../config/sharegpt_input_token_lens.json'
+output_file = '../config/sharegpt_output_token_lens.json'
 
 with open(input_file, 'r') as f:
     input_token_list = json.load(f)
