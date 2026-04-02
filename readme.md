@@ -4,10 +4,22 @@
 
 ## Dependencies
 
-This project requires C++17 or higher, and Python 3.11 or higher. To install the necessary Python dependencies, run:
+This project requires C++17 or higher, g++-10, libssl-dev, and Python 3.11 or higher.
+
+```
+sudo apt install g++-10 libssl-dev
+```
+
+To install the necessary Python dependencies, run:
 
 ```
 python3 -m pip install zigzag-dse
+```
+
+You also need to install gpytorch:
+
+```
+pip install gpytorch
 ```
 
 ---

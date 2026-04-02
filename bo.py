@@ -15,13 +15,13 @@ from torch.distributions import Normal
 from tqdm import tqdm
 
 # ==========================================
-# 0. 全局环境、设备设定
+# 0. Global environment, device settings
 # ==========================================
 device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 print(device)
 
 def set_global_seed(seed):
-    """固定所有随机种子以保证实验的严格可复现性"""
+    """Fix all random seeds to ensure strict experimental reproducibility"""
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -31,12 +31,12 @@ def set_global_seed(seed):
         torch.backends.cudnn.benchmark = False
 
 # ==========================================
-# 1. 解析外部命令行参数 (兼容 BO_LNS.py 逻辑)
+# 1. Parse external command line arguments (compatible with BO_LNS.py logic)
 # ==========================================
 NOW_DIR = Path(__file__).resolve().parent
 
-# --- 1.1 解析工作目录 (sys.argv[1]) ---
-# 默认路径
+# --- 1.1 Parse working directory (sys.argv[1]) ---
+# Default path
 base_dir_str = "exp_diff_1/Carch_Cmapping_decode_hybrid_edmc_rl_gov_2048_70B/"
 if len(sys.argv) >= 2:
     base_dir_str = sys.argv[1]
@@ -45,7 +45,7 @@ BASE_DIRECTORY = NOW_DIR / base_dir_str
 HETERO_DIRECTORY = BASE_DIRECTORY / "hetero_phase/"  
 COMPASS_CONFIG_PATH = NOW_DIR / base_dir_str / "compass_config_search.json"
 
-# 创建所需的全部数据目录
+# Create all necessary data directories
 for d in [
     HETERO_DIRECTORY, 
     HETERO_DIRECTORY / "hardware_params", 
@@ -59,8 +59,8 @@ COMPASS_RUN_CMD = NOW_DIR / "build/compass"
 
 LOG_FILE_PATH = HETERO_DIRECTORY / "dse_optimization_log.csv"
 
-# --- 1.2 解析微批次参数/任务类型 (sys.argv[2]) ---
-micro_batch_options = [] # 默认 decode
+# --- 1.2 Parse micro-batch parameters/task type (sys.argv[2]) ---
+micro_batch_options = [] # default decode
 if len(sys.argv) >= 3:
     task_type = sys.argv[2]
     if task_type == 'prefill':
@@ -104,21 +104,21 @@ if len(sys.argv) >= 4:
         assert False, f"Unsupported scale value: {scale_val}. Supported values are 32, 256, 1024."
 
 
-# 仿真器全局缓存与计数器
+# Simulator global cache and counter
 SIMULATOR_CACHE = {}
 LOG_ID_COUNTER = 0
 
 # ==========================================
-# 2. 全局统一配置中心 (动态挂载外部参数)
+# 2. Global Unified Configuration Center (dynamically mount external parameters)
 # ==========================================
 SEARCH_SPACE = {
-    # 动态生成的阵列形状候选：(H, W) 严格绑定
+    # Dynamically generated array shape candidates: (H, W) strictly bound
     'SHAPE_LIST': shape_list, 
     
-    # 系统级离散/非线性变量
+    # System-level discrete/nonlinear variables
     'SYS_PARAMS': {
-        'dram_bw': [16,32,64,128,256], # DRAM 带宽
-        'nop_bw': [32,64,128,256,512],       # NoC 网络带宽
+        'dram_bw': [16,32,64,128,256], # DRAM bandwidth
+        'nop_bw': [32,64,128,256,512],       # NoC network bandwidth
         'micro_batch': micro_batch_options,
         'tensor_parall':[4,8,16,32,64]
     }
@@ -129,51 +129,51 @@ CONFIG = {
         'seed': 42,
     },
     'CHIPLET': {
-        'num_types': len(chip_type_list),       # 芯粒种类数量 (0=小, 1=中, 2=大)
+        'num_types': len(chip_type_list),       # Number of chiplet types (0=small, 1=medium, 2=large)
     },
     'BO': {
-        'init_samples': 10,    # 初始随机采样评估的次数 (冷启动)
-        'iterations': 90,     # 贝叶斯优化主循环总迭代次数
-        'gp_train_steps': 20, # 每次获得新数据后，GP 模型参数的训练步数
-        'gp_lr': 0.1,         # GP 模型 Adam 优化器的学习率
+        'init_samples': 10,    # Number of initial random sampling evaluations (cold start)
+        'iterations': 90,     # Total iterations of the Bayesian optimization main loop
+        'gp_train_steps': 20, # Number of training steps for GP model parameters after acquiring new data
+        'gp_lr': 0.1,         # Learning rate for the GP model's Adam optimizer
     },
-    'SA_OUTER': {             # 外层模拟退火 (搜索系统级参数)
-        'steps': 40,         # 外层随机漫步的总步数
-        'T_init': 1.0,        # 初始温度
-        'alpha': 0.90,        # 降温系数
-        'explore_decay': 0.5, # 缓存命中时，重新探索内层布局的概率衰减率
+    'SA_OUTER': {             # Outer simulated annealing (searching for system-level parameters)
+        'steps': 40,         # Total steps of the outer random walk
+        'T_init': 1.0,        # Initial temperature
+        'alpha': 0.90,        # Cooling coefficient
+        'explore_decay': 0.5, # Probability decay rate for re-exploring inner layout on cache hit
     },
-    'SA_INNER': {             # 内层模拟退火 (搜索架构级布局)
-        'steps': 100,         # 内层随机漫步的总步数
-        'T_init': 1.0,        # 初始温度
-        'alpha': 0.95,        # 降温系数
+    'SA_INNER': {             # Inner simulated annealing (searching for architectural-level layout)
+        'steps': 100,         # Total steps of the inner random walk
+        'T_init': 1.0,        # Initial temperature
+        'alpha': 0.95,        # Cooling coefficient
     }
 }
 
-# --- 自动计算的动态维度变量 ---
+# --- Automatically calculated dynamic dimension variables ---
 NUM_SYS_VARS = len(SEARCH_SPACE['SYS_PARAMS'])
-# 【修改】：张量前缀现在只有 1 个 shape_norm，加上系统参数的数量
+# [Modification]: The tensor prefix now has only 1 shape_norm, plus the number of system parameters
 TENSOR_OFFSET = 1 + NUM_SYS_VARS 
 
 MAX_H = int(max(shape[0] for shape in SEARCH_SPACE['SHAPE_LIST']))
 MAX_W = int(max(shape[1] for shape in SEARCH_SPACE['SHAPE_LIST']))
 MAX_L = MAX_H * MAX_W
 
-# 新增一个辅助解析函数，方便随处调用
+# Add a helper parsing function for easy invocation anywhere
 def parse_shape(shape_norm):
-    """将 [0, 1] 的归一化尺寸索引反解为真实的 (H, W)"""
+    """Resolve the normalized size index of [0, 1] back to the real (H, W)"""
     shape_list = SEARCH_SPACE['SHAPE_LIST']
     idx = int(round(shape_norm * (len(shape_list) - 1)))
     return shape_list[idx]
 
-# 后续衔接: class HierarchicalCompositeKernel(gpytorch.kernels.Kernel): ... 
-# (保留原来的核心模型和循环代码即可)
+# Follow-up: class HierarchicalCompositeKernel(gpytorch.kernels.Kernel): ... 
+# (Retain original core model and loop code)
 
 # ==========================================
-# 2. 真实物理仿真器接口 (Compass Simulator)
+# 2. Real Physical Simulator Interface (Compass Simulator)
 # ==========================================
 def get_chiplet_spec(chip_type_idx,chip_size):
-    """将类别下标映射为 BO_LNS.py 所需的物理规格字典"""
+    """Map category index to physical spec dictionary required by BO_LNS.py"""
     chip_type_idx = int(chip_type_idx)
     return {
         "type": chip_type_list[chip_type_idx],
@@ -188,7 +188,7 @@ def parse_tensor_to_config(x_tensor):
     H, W = parse_shape(x[0].item())
     num_chiplets = int(H * W)
     
-    # 系统参数偏移量从 1 开始
+    # System parameter offset starts from 1
     sys_norms = x[1:TENSOR_OFFSET]
     real_sys_vals = {}
     for i, (param_name, candidate_list) in enumerate(SEARCH_SPACE['SYS_PARAMS'].items()):
@@ -203,7 +203,7 @@ def parse_tensor_to_config(x_tensor):
             chip_type = x[TENSOR_OFFSET + idx].item()
             chiplets.append(get_chiplet_spec(chip_type,chip_size))
             
-    # 构建 Compass 评估所期望的 JSON 字典
+    # Build JSON dictionary expected by Compass evaluation
     config = {
         "num_chiplets": num_chiplets,
         "chip_x":W,
@@ -221,7 +221,7 @@ def CompassSimulator(x_tensor):
     
     config = parse_tensor_to_config(x_tensor)
     
-    # Hash 缓存检查
+    # Hash cache check
     config_str = json.dumps(config, sort_keys=True)
     key = hashlib.sha256(config_str.encode('utf-8')).hexdigest()
     if key in SIMULATOR_CACHE:
@@ -238,14 +238,14 @@ def CompassSimulator(x_tensor):
         json.dump(config, f, indent=2)
         
     try:
-        # 执行底层物理仿真器命令
+        # Execute underlying physical simulator command
         with open(compass_out_path, "w") as outfile:
             subprocess.run(
                 [str(COMPASS_RUN_CMD), str(COMPASS_CONFIG_PATH), str(json_path), str(csv_path)], 
                 check=True, stdout=outfile, stderr=outfile, cwd=BASE_DIRECTORY
             )
             
-        # 读取结果并计算代价
+        # Read results and calculate cost
         with open(csv_path, "r") as f:
             header = f.readline()
             values = f.readline().strip().split(",")
@@ -255,13 +255,13 @@ def CompassSimulator(x_tensor):
         
     except Exception as e:
         tqdm.write(f"\n[Warning] Simulator failed for Log ID {log_id}: {e}")
-        total_cost = 1e9  # 惩罚无效架构
+        total_cost = 1e9  # Penalty for invalid architecture
         
     SIMULATOR_CACHE[key] = total_cost
     return torch.tensor([total_cost], dtype=torch.float)
 
 # ==========================================
-# 3. 核心数学模型：动态复合核函数与高斯过程
+# 3. Core mathematical model: dynamic composite kernel function and Gaussian process
 # ==========================================
 class HierarchicalCompositeKernel(gpytorch.kernels.Kernel):
     def __init__(self, **kwargs):
@@ -280,46 +280,46 @@ class HierarchicalCompositeKernel(gpytorch.kernels.Kernel):
     def variance_arch(self): return torch.nn.functional.softplus(self.raw_variance_arch)
 
     def forward(self, x1, x2, diag=False, **kwargs):
-        # 1. 提取系统级参数 (现在 0:TENSOR_OFFSET 完美囊括了 shape_idx 和所有的 sys_norms)
+        # 1. Extract system-level parameters (now 0:TENSOR_OFFSET perfectly covers shape_idx and all sys_norms)
         sys_x1, sys_x2 = x1[:, 0:TENSOR_OFFSET], x2[:, 0:TENSOR_OFFSET]
         K_sys = self.sys_kernel(sys_x1, sys_x2, diag=diag)
         
-        # 2. 提取架构级布局张量
+        # 2. Extract architectural-level layout tensor
         arch_x1, arch_x2 = x1[:, TENSOR_OFFSET:], x2[:, TENSOR_OFFSET:]
         
-        # 获取芯粒种类数量 (依赖全局配置，例如 3)
+        # Get the number of chiplet types (depends on global configuration, e.g., 3)
         num_types = CONFIG['CHIPLET']['num_types']
         
-        # 获取曼哈顿距离的指数衰减权重矩阵
+        # Get the exponential decay weight matrix of Manhattan distance
         weights = torch.exp(-self.lengthscale_arch * self.dist_matrix.to(x1.device))
         
         # ==========================================
-        # 核心优化：One-Hot + Einsum 降维打击
+        # Core Optimization: One-Hot + Einsum dimensionality reduction
         # ==========================================
-        # 过滤掉无效的占位符坑位 (-1)
+        # Filter out invalid placeholder slots (-1)
         valid_mask1 = (arch_x1 != -1).float()
         valid_mask2 = (arch_x2 != -1).float()
         
-        # 转换为 One-Hot 编码矩阵 (形状变成: [N, MAX_L, num_types])
-        # clamp(min=0) 只是为了防止把 -1 传给 one_hot 导致底层报错，反正在下一步就会被 mask 乘成 0
+        # Convert to One-Hot encoded matrix (shape becomes: [N, MAX_L, num_types])
+        # clamp(min=0) is just to prevent passing -1 to one_hot which would cause an underlying error, it will be masked to 0 in the next step anyway
         O1 = torch.nn.functional.one_hot(arch_x1.clamp(min=0).long(), num_classes=num_types).float()
         O2 = torch.nn.functional.one_hot(arch_x2.clamp(min=0).long(), num_classes=num_types).float()
         
-        # 屏蔽无效坑位的 One-Hot 向量
+        # Mask One-Hot vectors of invalid slots
         O1 = O1 * valid_mask1.unsqueeze(-1)
         O2 = O2 * valid_mask2.unsqueeze(-1)
         
         if diag:
-            # diag=True 时只需要计算对角线（自己和自己的协方差），直接返回一维向量 [N]
+            # When diag=True, only the diagonal needs to be calculated (covariance with itself), returning a 1D vector [N]
             K_arch_diag_val = torch.einsum('ikt, kl, ilt -> i', O1, weights, O1)
             K_arch_diag = self.variance_arch * K_arch_diag_val
             return K_sys * (1.0 + K_arch_diag)
             
-        # 3. 非对角线情况：利用 Einsum 高速矩阵收缩，避免 4D 广播，直接算出 [N1, N2] 矩阵
+        # 3. Off-diagonal case: use Einsum for high-speed matrix contraction, avoiding 4D broadcasting, directly calculating [N1, N2] matrix
         K_arch_val = torch.einsum('ikt, kl, jlt -> ij', O1, weights, O2)
         
-        # 4. 强制宏观形状匹配过滤 (对齐你的降维逻辑)
-        # 只要 x1 和 x2 在 shape_idx (即 x[:, 0]) 上不一样，它们之间的局部架构相似度 K_arch_val 就被强制清零
+        # 4. Enforce macro-shape matching filter (aligning with your dimensionality reduction logic)
+        # As long as x1 and x2 are different in shape_idx (i.e., x[:, 0]), their local architecture similarity K_arch_val is forced to zero
         shape_match = (x1[:, 0].unsqueeze(1) == x2[:, 0].unsqueeze(0)).float()
         match_mask = shape_match
 
@@ -346,7 +346,7 @@ def expected_improvement(X_cand, model, likelihood, best_f):
         return (best_f - mean) * normal.cdf(Z) + std * torch.exp(normal.log_prob(Z))
 
 # ==========================================
-# 4. 双层嵌套模拟退火 (内层与外层)
+# 4. Double-layer nested simulated annealing (inner and outer)
 # ==========================================
 def optimize_inner_sa(Z_fixed, model, likelihood, best_f):
     H, W = parse_shape(Z_fixed[0])
@@ -386,7 +386,7 @@ def optimize_acqf_hierarchical(model, likelihood, best_f):
     shape_list = SEARCH_SPACE['SHAPE_LIST']
     sys_lists = list(SEARCH_SPACE['SYS_PARAMS'].values())
     
-    # 所有的列表拼装在一起处理
+    # All lists are assembled together for processing
     all_lists = [shape_list] + sys_lists
     num_outer_vars = len(all_lists)
     
@@ -442,7 +442,7 @@ def optimize_acqf_hierarchical(model, likelihood, best_f):
     return global_best_x
 
 # ==========================================
-# 5. CSV 日志辅助解析函数
+# 5. CSV Log helper parsing function
 # ==========================================
 def parse_tensor_for_logging(x_tensor, cost_value, iteration, num_types):
     x = x_tensor.detach().cpu().squeeze()
@@ -467,14 +467,14 @@ def parse_tensor_for_logging(x_tensor, cost_value, iteration, num_types):
     return log_data
 
 # ==========================================
-# 6. 主程序入口 (包含全链路闭环)
+# 6. Main program entry (including full-link closed loop)
 # ==========================================
 def run_hierarchical_bo():
     set_global_seed(CONFIG['GLOBAL']['seed'])
     
-    print(f"--- 启动分层芯粒架构 DSE (动态系统维度: {NUM_SYS_VARS}) ---")
+    print(f"--- Starting Hierarchical Chiplet Architecture DSE (Dynamic System Dimensions: {NUM_SYS_VARS}) ---")
     
-    # 初始化 CSV 日志
+    # Initialize CSV Log
     
     sys_keys = list(SEARCH_SPACE['SYS_PARAMS'].keys())
     num_types = CONFIG['CHIPLET']['num_types']
@@ -488,13 +488,13 @@ def run_hierarchical_bo():
     train_x_list = []
     sys_lists = list(SEARCH_SPACE['SYS_PARAMS'].values())
     
-    print("\n[*] 阶段 1: 正在进行初始架构随机采样与评估...")
+    print("\n[*] Phase 1: Performing initial architecture random sampling and evaluation...")
     for _ in range(CONFIG['BO']['init_samples']):
-        # 【修改】：抽取统一的索引数组并归一化
+        # [Modification]: Extract a unified index array and normalize it
         indices = [random.randint(0, len(lst)-1) for lst in [SEARCH_SPACE['SHAPE_LIST']] + sys_lists]
         Z_fixed = [idx / (len(lst) - 1) if len(lst) > 1 else 0.0 for idx, lst in zip(indices, [SEARCH_SPACE['SHAPE_LIST']] + sys_lists)]
         
-        # 反解真实的 H 和 W 用于生成内部微观布局
+        # Resolve real H and W for generating internal micro-layout
         H, W = SEARCH_SPACE['SHAPE_LIST'][indices[0]]
         
         x = torch.full((1, TENSOR_OFFSET + MAX_L), -1.0, device=device)
@@ -508,7 +508,7 @@ def run_hierarchical_bo():
     train_x = torch.cat(train_x_list)
     train_y_list = []
     
-    for i in tqdm(range(CONFIG['BO']['init_samples']), desc="初始评估进度", unit="架构"):
+    for i in tqdm(range(CONFIG['BO']['init_samples']), desc="Initial evaluation progress", unit="Architecture"):
         y = CompassSimulator(train_x[i:i+1]).to(device)
         train_y_list.append(y)
         
@@ -517,12 +517,12 @@ def run_hierarchical_bo():
             csv.DictWriter(f, fieldnames=fieldnames).writerow(log_data)
             
     train_y = torch.cat(train_y_list)
-    print(f"初始数据集构建完成，当前最低代价: {train_y.min().item():.6f}\n")
+    print(f"Initial dataset construction complete, current minimum cost: {train_y.min().item():.6f}\n")
     
     likelihood = gpytorch.likelihoods.GaussianLikelihood().to(device)
     
-    print("[*] 阶段 2: 启动基于贝叶斯优化的设计空间探索...")
-    pbar = tqdm(range(CONFIG['BO']['iterations']), desc="BO 寻优进度", unit="轮次")
+    print("[*] Phase 2: Starting design space exploration based on Bayesian optimization...")
+    pbar = tqdm(range(CONFIG['BO']['iterations']), desc="BO optimization progress", unit="Iteration")
     
     for iteration in pbar:
         best_f = train_y.min().item()
@@ -550,7 +550,7 @@ def run_hierarchical_bo():
             csv.DictWriter(f, fieldnames=fieldnames).writerow(log_data)
 
         current_global_best = train_y.min().item()
-        pbar.set_postfix({'本轮代价': f"{new_y.item():.6f}", '全局最优': f"{current_global_best:.6f}"})
+        pbar.set_postfix({'Current cost': f"{new_y.item():.6f}", 'Global best': f"{current_global_best:.6f}"})
 
     pbar.close()
 
@@ -559,20 +559,20 @@ def run_hierarchical_bo():
     best_config_json = parse_tensor_to_config(train_x[best_idx])
     
     print("\n" + "="*40)
-    print(" 🏆 探索完成 - 发现最优芯片架构 🏆")
+    print("Exploration Complete - Optimal Chip Architecture Found")
     print("="*40)
-    print(f"最低评估代价 (latency*energy*mc): {train_y[best_idx].item():.6f}\n")
+    print(f"Minimum evaluated cost (latency*energy*mc): {train_y[best_idx].item():.6f}\n")
     
     H_best, W_best = parse_shape(best_config[0].item())
-    print(f"[系统级宏观配置]")
-    print(f"  ▸ 阵列尺寸: {H_best}x{W_best}")
+    print(f"[System-level macro configuration]")
+    print(f"  ▸ Array size: {H_best}x{W_best}")
     
     for i, (param_name, candidate_list) in enumerate(SEARCH_SPACE['SYS_PARAMS'].items()):
         norm_val = best_config[1 + i].item()
         real_idx = int(round(norm_val * (len(candidate_list) - 1)))
         print(f"  ▸ {param_name}: {candidate_list[real_idx]}")
     
-    print(f"\n[架构级微观布局 (对应 get_chiplet_spec 的 0,1,2 规格)]")
+    print(f"\n[Architectural-level micro layout (corresponding to 0, 1, 2 specs in get_chiplet_spec)]")
     for r in range(H_best):
         row_str = []
         for c in range(W_best):
@@ -581,11 +581,11 @@ def run_hierarchical_bo():
             row_str.append(str(chip_type))
         print("  [" + "  ".join(row_str) + "]")
         
-    print(f"\n[*] 寻优轨迹已完整保存至: {os.path.abspath(LOG_FILE_PATH)}")
+    print(f"\n[*] Optimization trajectory has been completely saved to: {os.path.abspath(LOG_FILE_PATH)}")
 
     with open(HETERO_DIRECTORY / f"best_hardware.json", "w") as f:
         json.dump(best_config_json, f, indent=2)
-    print("\n[*] 已保存最优配置的 JSON 文件...")
+    print("\n[*] The optimal configuration JSON file has been saved...")
 
 if __name__ == "__main__":
     run_hierarchical_bo()
