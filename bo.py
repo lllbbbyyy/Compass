@@ -69,6 +69,10 @@ if len(sys.argv) >= 3:
         micro_batch_options = [1, 2, 3, 6, 11, 22, 33, 66]
     elif task_type == 'decode':
         micro_batch_options = [1, 2, 4, 8, 16, 32, 64, 128]
+    elif task_type == 'serving_prefill':
+        micro_batch_options = [1]
+    elif task_type.startswith('serving'):
+        micro_batch_options = [1, 2, 4, 8, 16, 32, 64, 128]
     else:
         assert False, f"Unsupported task type: {task_type}. Supported types are 'prefill', 'decode', 'mixed'."
 

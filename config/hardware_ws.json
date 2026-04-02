@@ -3,184 +3,187 @@
     "nop_bw": 128,
     "dram_bw": 64,
     "micro_batch": 4,
+    "tensor_parall": 8,
+    "chip_x": 6,
+    "chip_y": 6,
     "chiplets": [
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       },
       {
-        "type": "tpu",
+        "type": "ws",
         "buffer_size": 2048,
         "compute_units": 1024
       }

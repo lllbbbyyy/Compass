@@ -91,22 +91,14 @@ You will then find the following in the try folder:
 
 ## Run Exp
 
-Go to the `exp` directory
+To perform hardware sampling under a given compute budget and workload using `bo.py` (which internally calls compass):
 
 ```
-cd exp
+python3 bo.py <exp_dir_path> <workload [prefill/decode]> <scale [64/512/2048]>
 ```
 
-run:
+To directly run the comparative experiments from the paper:
 
 ```
-python3 exp.py all
+python3 exp.py
 ```
-
-Obtain the optimal mapping results for each service policy and hardware under a given sequence length distribution:
-
-```
-python3 get_res.py <seq length distri>
-```
-
-It is worth noting that calling directly through the zigzag library will generate a large number of intermediate evaluation results, which may cause the experiment to run slowly. We recommend manually cloning the zigzag source code into the zigzag_call directory and modifying it to only output the final result JSON file.
