@@ -16,10 +16,10 @@ To install the necessary Python dependencies, run:
 python3 -m pip install zigzag-dse
 ```
 
-You also need to install gpytorch:
+You also need to install gpytorch for BO search:
 
 ```
-pip install gpytorch
+python3 -m pip install gpytorch
 ```
 
 ---
