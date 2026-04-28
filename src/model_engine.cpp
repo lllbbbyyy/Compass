@@ -320,6 +320,7 @@ nlohmann::json CompassModelEngine::get_latency_detail()
             temp["calcTime"]=detail.calcTime;
             temp["nocTime"]=detail.nocTime;
             temp["dramTime"]=detail.dramTime;
+            temp["layerName"]=batchedModels[detail.batchID]->getNode(detail.layerID).name();
             j["core" + std::to_string(i)].push_back(temp);
         }
     }
@@ -344,6 +345,7 @@ nlohmann::json CompassModelEngine::get_energy_detail()
             temp["ubufEnergy"]=detail.ubufEnergy;
             temp["nocEnergy"]=detail.nocEnergy;
             temp["dramEnergy"]=detail.dramEnergy;
+            temp["layerName"]=batchedModels[detail.batchID]->getNode(detail.layerID).name();
             j["core" + std::to_string(i)].push_back(temp);
         }
     }
