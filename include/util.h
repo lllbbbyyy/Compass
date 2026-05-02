@@ -20,6 +20,7 @@
 #include <shared_mutex>
 #include <map>
 #include <cmath>
+#include <optional>
 #include <limits>
 #include <type_traits>
 
