@@ -1,0 +1,31 @@
+{
+    "seed": 43,
+    "req_generator_input_length_path": "../config/sharegpt_input_token_lens.json",
+    "req_generator_output_length_path": "../config/sharegpt_output_token_lens.json",
+    "req_gen_mode": "fixed",
+    "is_chunked_prefill": false,
+    "req_number": 30,
+    "req_prefill_number": 4,
+    "req_decode_number": 0,
+    "batch_size": 4,
+    "model_info": {
+        "type": "gpt3_merged",
+        "n_layer": 1,
+        "d_model": 4096,
+        "n_head": 32,
+        "d_head": 128,
+        "d_ffn": 16384,
+        "d_model_tiling_size": 512,
+        "d_ffn_tiling_size": 2048
+    },
+    "dram_num": 4,
+    "run_mode": "exec",
+    "best_mapping_save_path": "",
+    "search_process_save_path": "",
+    "GA_population_size": 120,
+    "GA_generations": 200,
+    "exec_load_path": "./best_mapping.json",
+    "detail_latency_save_path": "./exec_latency_detail.json",
+    "detail_energy_save_path": "./exec_energy_detail.json",
+    "detail_mc_save_path": "./exec_mc_detail.json"
+}

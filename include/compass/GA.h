@@ -58,7 +58,7 @@ public:
     GA(const std::vector<std::vector<std::shared_ptr<Network>>> &_batchedModels, const std::vector<std::shared_ptr<CoreMapper>> &_coreMappers, std::shared_ptr<NoC> _noc)
     {
         BATCH_SIZE = _batchedModels[0].size();
-        LAYER_NUM = _batchedModels[0][0]->len();
+        LAYER_NUM = _batchedModels[0][0]->mapping_len();
         CHIPLET_NUM = _coreMappers.size();
         population.resize(pop_size);
         engines.resize(_batchedModels.size());

@@ -37,6 +37,9 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	else if(type=="gpt3"){
 		return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
 	}
+	else if(type=="gpt3_merged"){
+		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
+	}
 	return nullptr;
 }
 
@@ -198,7 +201,7 @@ int main(int argc, char *argv[])
 			
 			// auto n =gen_convs(36);
 			// auto n=create_GPT3(batches[i],1,256,8,32);
-			if(model_type=="gpt3"||model_type=="llama3"){
+			if(model_type=="gpt3"||model_type=="gpt3_merged"||model_type=="llama3"){
 				n = create_llm(model_info, batches[i]);
 			}
 			else{
@@ -216,6 +219,15 @@ int main(int argc, char *argv[])
 		DEBUG("layer", i, batched_models[0][0]->getNode(i).name());
 	}
 	DEBUG("models created", layer_lens);
+	size_t mapping_layer_lens = batched_models[0][0]->mapping_len();
+	for (size_t i = 0; i < mapping_layer_lens; i++)
+	{
+		const auto& mapping_node = batched_models[0][0]->getMappingNode(static_cast<Network::mapping_id_t>(i));
+		lid_t first_exec = mapping_node.exec_layer_ids.empty() ? -1 : mapping_node.exec_layer_ids.front();
+		lid_t last_exec = mapping_node.exec_layer_ids.empty() ? -1 : mapping_node.exec_layer_ids.back();
+		DEBUG("mapping layer", i, mapping_node.name, "exec_count", mapping_node.exec_layer_ids.size(), "exec_range", first_exec, last_exec);
+	}
+	DEBUG("mapping layers created", mapping_layer_lens);
 
 	string run_mode= config_j["run_mode"];
 	string best_solution_file=config_j["best_mapping_save_path"];

@@ -1,6 +1,8 @@
 #include "network.h"
 
+#include <algorithm>
 #include <cassert>
+#include <limits>
 #include <stdexcept>
 
 #include "core_mapping.h"
@@ -97,6 +99,27 @@ void Network::err_eltwise(const std::string& lname, const len_t from_C, const le
 }
 
 lid_t Network::add(Layer* l, const layer_set& ifmPrevs, bwidth_t width, const std::vector<InputData>& ifmInputData, const layer_set& wgtPrevs,const std::vector<InputData>& wgtInputData){
+	return addToMapping(-1, l, ifmPrevs, width, ifmInputData, wgtPrevs, wgtInputData);
+}
+
+lid_t Network::add(mapping_id_t mapping_id, Layer* l, const layer_set& ifmPrevs, bwidth_t width, const std::vector<InputData>& ifmInputData, const layer_set& wgtPrevs,const std::vector<InputData>& wgtInputData){
+	return addToMapping(mapping_id, l, ifmPrevs, width, ifmInputData, wgtPrevs, wgtInputData);
+}
+
+Network::mapping_id_t Network::createMappingNode(const std::string& name){
+	if(mapping_nodes.size() >= static_cast<size_t>(std::numeric_limits<mapping_id_t>::max())){
+		throw std::overflow_error("Too many mapping nodes! Consider using a larger format for mapping_id_t.");
+	}
+	mapping_id_t mapping_id = static_cast<mapping_id_t>(mapping_nodes.size());
+	mapping_nodes.push_back({name, {}});
+	return mapping_id;
+}
+
+lid_t Network::addToMapping(mapping_id_t mapping_id, Layer* l, const layer_set& ifmPrevs, bwidth_t width, const std::vector<InputData>& ifmInputData, const layer_set& wgtPrevs,const std::vector<InputData>& wgtInputData){
+	if(mapping_id >= 0 && static_cast<size_t>(mapping_id) >= mapping_nodes.size()){
+		throw std::logic_error("Invalid mapping node ID.");
+	}
+
 	// If no prevs indicated, use default_bs.
 	l->ifm_input_data = ifmInputData;
 	l->wgt_input_data = wgtInputData;
@@ -241,6 +264,13 @@ lid_t Network::add(Layer* l, const layer_set& ifmPrevs, bwidth_t width, const st
 
 	// Add layer to network
 	layers.emplace_back(l, prev_layers, external_C, width, prevWgts);
+	if(mapping_id < 0){
+		mapping_id = static_cast<mapping_id_t>(mapping_nodes.size());
+		mapping_nodes.push_back({layers[cur_id].name(), {cur_id}});
+	}else{
+		mapping_nodes[mapping_id].exec_layer_ids.push_back(cur_id);
+	}
+	exec_to_mapping.push_back(mapping_id);
 
 	return cur_id;
 }
@@ -263,6 +293,64 @@ const Node& Network::operator[](lid_t id) const{
 
 lid_t Network::len() const{
 	return static_cast<lid_t>(layers.size());
+}
+
+size_t Network::mapping_len() const{
+	return mapping_nodes.size();
+}
+
+const Network::MappingNode& Network::getMappingNode(mapping_id_t id) const{
+	assert(id >= 0 && static_cast<size_t>(id) < mapping_nodes.size());
+	return mapping_nodes[id];
+}
+
+Network::mapping_id_t Network::mapping_id_for_exec(lid_t id) const{
+	assert(id >= 0 && static_cast<size_t>(id) < exec_to_mapping.size());
+	return exec_to_mapping[id];
+}
+
+std::vector<cidx_t> Network::expand_mapping_to_exec(const std::vector<cidx_t>& layer_to_chip) const{
+	if(layer_to_chip.size() == layers.size()){
+		return layer_to_chip;
+	}
+	if(layer_to_chip.size() != mapping_nodes.size()){
+		throw std::logic_error("layer_to_chip length must match either mapping nodes or execution layers.");
+	}
+	std::vector<cidx_t> expanded(layers.size(), 0);
+	for(size_t mapping_id = 0; mapping_id < mapping_nodes.size(); ++mapping_id){
+		if(mapping_nodes[mapping_id].exec_layer_ids.empty()){
+			throw std::logic_error("Mapping node has no execution layers.");
+		}
+		for(lid_t exec_id : mapping_nodes[mapping_id].exec_layer_ids){
+			assert(exec_id >= 0 && static_cast<size_t>(exec_id) < expanded.size());
+			expanded[exec_id] = layer_to_chip[mapping_id];
+		}
+	}
+	return expanded;
+}
+
+std::vector<int> Network::expand_mapping_segmentation(const std::vector<int>& segmentation) const{
+	const size_t exec_seg_len = layers.empty() ? 0 : layers.size() - 1;
+	const size_t mapping_seg_len = mapping_nodes.empty() ? 0 : mapping_nodes.size() - 1;
+	if(segmentation.size() == exec_seg_len){
+		return segmentation;
+	}
+	if(segmentation.size() != mapping_seg_len){
+		throw std::logic_error("segmentation length must match either mapping nodes or execution layers.");
+	}
+	std::vector<int> expanded(exec_seg_len, 0);
+	for(size_t mapping_id = 0; mapping_id + 1 < mapping_nodes.size(); ++mapping_id){
+		const auto& exec_ids = mapping_nodes[mapping_id].exec_layer_ids;
+		if(exec_ids.empty()){
+			throw std::logic_error("Mapping node has no execution layers.");
+		}
+		lid_t last_exec = exec_ids.back();
+		assert(last_exec >= 0);
+		if(static_cast<size_t>(last_exec) < expanded.size()){
+			expanded[last_exec] = segmentation[mapping_id];
+		}
+	}
+	return expanded;
 }
 
 bool Network::is_chain() const{

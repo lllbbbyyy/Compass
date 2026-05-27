@@ -113,6 +113,75 @@ std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers
 	return n;
 };
 
+std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n_layers,len_t d_model,len_t n_heads,len_t d_head,len_t d_ff,len_t d_model_tiling_size,len_t d_ff_tiling_size)
+{
+	(void)d_model_tiling_size;
+	(void)d_ff_tiling_size;
+	auto n=std::make_shared<Network>();
+	assert(d_model==n_heads*d_head);
+	len_t seq_lens_sum = 0;
+	for(auto& req : reqs){
+		seq_lens_sum += req.lens;
+	}
+
+	InputData input("input", fmap_shape(d_model, seq_lens_sum, 1));
+	InputData pos_encoding("pos_encoding", fmap_shape(d_model, seq_lens_sum, 1));
+
+	lid_t prev_layer=n->add(NLAYER("input_add", Eltwise, K=d_model, H=seq_lens_sum, W=1, N=2), {},0,{input,pos_encoding});
+
+	for(len_t i=0;i<n_layers;i++){
+		std::string layer_name="layer"+std::to_string(i);
+		auto qkv_gen_mapping = n->createMappingNode(layer_name+"_QKV_Gen");
+
+		lid_t qkv_gen = n->add(qkv_gen_mapping, NLAYER(layer_name+"_qkv_gen_merged", Conv, C=d_model, K=3*d_model, H=seq_lens_sum, W=1), {prev_layer});
+		n->getNode(qkv_gen).mustWriteDRAM=true;
+
+		auto attn_core_mapping = n->createMappingNode(layer_name+"_Attn_Core");
+		Network::layer_set QKVs;
+		for(len_t j=0;j<n_heads;j++)
+		{
+			std::string name = layer_name+"_head"+std::to_string(j);
+			lid_t QK, QK_elt, QKV;
+
+			for(size_t k=0;k<reqs.size();k++)
+			{
+				const auto& req=reqs[k];
+				std::string name_mul=name+"_req"+std::to_string(k);
+				if(req.type==Req::Type::Prefill||(req.type==Req::Type::ChunkedPrefill&&req.his_lens==0))
+				{
+					QK = n->add(attn_core_mapping, NLAYER(name_mul+"_QK_P", Conv, C=d_head,K=req.lens, H=req.lens, W=1), {qkv_gen},0,{}, {qkv_gen});
+					QK_elt = n->add(attn_core_mapping, NLAYER(name_mul+"_QK_elt_P", PTP, K=req.lens,H=req.lens, W=1), {QK});
+					QKV = n->add(attn_core_mapping, NLAYER(name_mul+"_QKV_P", Conv, C=req.lens,K=d_head, H=req.lens, W=1), {QK_elt},0,{}, {qkv_gen});
+				}
+				else if(req.type==Req::Type::Decode||(req.type==Req::Type::ChunkedPrefill&&req.his_lens!=0))
+				{
+					InputData k_cache("k_cache", fmap_shape(req.his_lens, d_head, 1));
+					InputData v_cache("v_cache", fmap_shape(req.his_lens, d_head, 1));
+					QK = n->add(attn_core_mapping, NLAYER(name_mul+"_QK_D", Conv, C=d_head,K=req.his_lens+req.lens, H=req.lens, W=1), {qkv_gen},0,{}, {qkv_gen}, {k_cache});
+					QK_elt = n->add(attn_core_mapping, NLAYER(name_mul+"_QK_elt_D", PTP, K=req.his_lens+req.lens,H=req.lens, W=1), {QK});
+					QKV = n->add(attn_core_mapping, NLAYER(name_mul+"_QKV_D", Conv, C=req.his_lens+req.lens,K=d_head, H=req.lens, W=1), {QK_elt},0,{}, {qkv_gen}, {v_cache});
+				}
+				QKVs.push_back(QKV);
+			}
+		}
+
+		auto out_proj_mapping = n->createMappingNode(layer_name+"_Out_Proj");
+		lid_t attn_output = n->add(out_proj_mapping, NLAYER(layer_name+"_out_proj_merged", Conv, C=d_model, K=d_model, H=seq_lens_sum, W=1), QKVs);
+		lid_t res1 = n->add(NLAYER(layer_name+"_res1", Eltwise, K=d_model, H=seq_lens_sum, W=1, N=2), {attn_output, prev_layer});
+		lid_t norm1 = n->add(NLAYER(layer_name+"_norm1", PTP, K=d_model, H=seq_lens_sum, W=1), {res1});
+
+		auto ffn1_act_mapping = n->createMappingNode(layer_name+"_FFN1_Act");
+		lid_t ff1 = n->add(ffn1_act_mapping, NLAYER(layer_name+"_ffn1_merged", Conv, C=d_model, K=d_ff, H=seq_lens_sum, W=1), {norm1});
+		lid_t gelu = n->add(ffn1_act_mapping, NLAYER(layer_name+"_GeLU", PTP, K=d_ff, H=seq_lens_sum, W=1), {ff1});
+		lid_t ff2 = n->add(NLAYER(layer_name+"_ffn2_merged", Conv, C=d_ff, K=d_model, H=seq_lens_sum, W=1), {gelu});
+		lid_t res2 = n->add(NLAYER(layer_name+"_res2", Eltwise, K=d_model, H=seq_lens_sum, W=1, N=2), {ff2, norm1});
+		lid_t norm2 = n->add(NLAYER(layer_name+"_norm2", PTP, K=d_model, H=seq_lens_sum, W=1), {res2});
+		prev_layer = norm2;
+	}
+
+	return n;
+};
+
 std::shared_ptr<Network> create_llama3(
     const std::vector<Req>& reqs,
     len_t n_layers,

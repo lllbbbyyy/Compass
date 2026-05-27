@@ -493,6 +493,22 @@ void GA::save_best_solution(const std::string &filename,int micro_batch_size)
     j["segmentation"] = best_solution.segmentation;
     j["layer_to_chip"] = best_solution.layerToChip;
     j["micro_batch_size"] = micro_batch_size;
+    if(!engines.empty() && !engines.back().empty() && !engines.back()[0]->batchedModels.empty()){
+        auto model = engines.back()[0]->batchedModels[0];
+        j["mapping_layers"] = nlohmann::json::array();
+        for(size_t mapping_id = 0; mapping_id < model->mapping_len(); ++mapping_id){
+            const auto& mapping_node = model->getMappingNode(static_cast<Network::mapping_id_t>(mapping_id));
+            nlohmann::json item;
+            item["mappingNodeID"] = mapping_id;
+            item["mappingNodeName"] = mapping_node.name;
+            item["execLayerIDs"] = mapping_node.exec_layer_ids;
+            item["execLayerNames"] = nlohmann::json::array();
+            for(auto exec_id : mapping_node.exec_layer_ids){
+                item["execLayerNames"].push_back(model->getNode(exec_id).name());
+            }
+            j["mapping_layers"].push_back(item);
+        }
+    }
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution saved to " << filename << "\n";

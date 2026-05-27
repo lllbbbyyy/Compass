@@ -76,7 +76,7 @@ cp ../config/hardware_ws.json ./
 Run Compass to search for a mapping on the Simba architecture:
 
 ```
-../build/compass search_config_example.json hardware_ws.json search_res.csv
+../build/compass search_config_example_gpt_merged.json hardware_ws.json search_res.csv
 ```
 
 Afterward, in the try folder, you will find:
@@ -90,7 +90,7 @@ Afterward, in the try folder, you will find:
 Then, run execution using the obtained mapping:
 
 ```
-../build/compass exec_config_example.json hardware_ws.json exec_res.csv
+../build/compass exec_config_example_gpt_merged.json hardware_ws.json exec_res.csv
 ```
 
 You will then find the following in the try folder:

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "bitset.h"
@@ -69,13 +70,22 @@ public:
 class Network{
 public:
 	typedef std::vector<lid_t> layer_set;
+	typedef int mapping_id_t;
+
+	struct MappingNode{
+		std::string name;
+		std::vector<lid_t> exec_layer_ids;
+	};
 
 private:
 	std::vector<Node> layers;
+	std::vector<MappingNode> mapping_nodes;
+	std::vector<mapping_id_t> exec_to_mapping;
 
 	// Used to check data range validity.
 	[[noreturn]] void err_mismatch(const std::string& lname, const fmap_shape& shape1, const fmap_shape& shape2, bool total=false);
 	[[noreturn]] void err_eltwise(const std::string& lname, const len_t from_C, const len_t add_C, const len_t elt_C);
+	lid_t addToMapping(mapping_id_t mapping_id, Layer* l, const layer_set& ifmPrevs, bwidth_t width, const std::vector<InputData>& ifm_input_data, const layer_set& wgtPrevs, const std::vector<InputData>& wgtInputData);
 
 public:
 	Network();
@@ -96,6 +106,8 @@ public:
 	 *  index of the added layer
 	 */
 	lid_t add(Layer* l, const layer_set& ifmPrevs={}, bwidth_t width=0, const std::vector<InputData>& ifm_input_data={}, const layer_set& wgtPrevs={},const std::vector<InputData>& wgtInputData={});
+	lid_t add(mapping_id_t mapping_id, Layer* l, const layer_set& ifmPrevs={}, bwidth_t width=0, const std::vector<InputData>& ifm_input_data={}, const layer_set& wgtPrevs={},const std::vector<InputData>& wgtInputData={});
+	mapping_id_t createMappingNode(const std::string& name);
 
 	void reset();
 
@@ -105,6 +117,11 @@ public:
 
 	// Length of the network
 	lid_t len() const;
+	size_t mapping_len() const;
+	const MappingNode& getMappingNode(mapping_id_t id) const;
+	mapping_id_t mapping_id_for_exec(lid_t id) const;
+	std::vector<cidx_t> expand_mapping_to_exec(const std::vector<cidx_t>& layer_to_chip) const;
+	std::vector<int> expand_mapping_segmentation(const std::vector<int>& segmentation) const;
 
 	// Chain: a network where node i depends on node i-1
 	bool is_chain() const;

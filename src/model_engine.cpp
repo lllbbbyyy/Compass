@@ -261,7 +261,13 @@ mc_t CompassModelEngine::calcMonetaryCost() {
 
 void CompassModelEngine::setLayerToChip(const std::vector<std::vector<cidx_t>>& _layerToChip){
     assert(_layerToChip.size() == batchDim);
-    layerToChip = _layerToChip;
+    layerToChip.clear();
+    layerToChip.reserve(batchDim);
+    for(size_t j = 0; j < _layerToChip.size(); ++j){
+        auto expanded = batchedModels[j]->expand_mapping_to_exec(_layerToChip[j]);
+        assert(expanded.size() == layerDim);
+        layerToChip.push_back(expanded);
+    }
     segmentsChips.clear();
     segmentsChips.resize(batchDim);
     size_t j=0;
@@ -284,8 +290,9 @@ void CompassModelEngine::setLayerToChip(const std::vector<std::vector<cidx_t>>& 
 
 void CompassModelEngine::setSegmentation(const std::vector<int>& _segmentation, const std::vector<std::vector<cidx_t>>& _layerToChip){
 
-    segmentation = _segmentation;
     layerDim = batchedModels[0]->len();
+    segmentation = batchedModels[0]->expand_mapping_segmentation(_segmentation);
+    assert(segmentation.size() == (layerDim == 0 ? 0 : layerDim - 1));
     segmentsLayers.clear();
     std::vector<lid_t> curLayers;
     for(size_t i = 0; i < layerDim; i++){
@@ -320,7 +327,11 @@ nlohmann::json CompassModelEngine::get_latency_detail()
             temp["calcTime"]=detail.calcTime;
             temp["nocTime"]=detail.nocTime;
             temp["dramTime"]=detail.dramTime;
-            temp["layerName"]=batchedModels[detail.batchID]->getNode(detail.layerID).name();
+            auto& model = batchedModels[detail.batchID];
+            auto mappingID = model->mapping_id_for_exec(detail.layerID);
+            temp["layerName"]=model->getNode(detail.layerID).name();
+            temp["mappingNodeID"]=mappingID;
+            temp["mappingNodeName"]=model->getMappingNode(mappingID).name;
             j["core" + std::to_string(i)].push_back(temp);
         }
     }
@@ -345,7 +356,11 @@ nlohmann::json CompassModelEngine::get_energy_detail()
             temp["ubufEnergy"]=detail.ubufEnergy;
             temp["nocEnergy"]=detail.nocEnergy;
             temp["dramEnergy"]=detail.dramEnergy;
-            temp["layerName"]=batchedModels[detail.batchID]->getNode(detail.layerID).name();
+            auto& model = batchedModels[detail.batchID];
+            auto mappingID = model->mapping_id_for_exec(detail.layerID);
+            temp["layerName"]=model->getNode(detail.layerID).name();
+            temp["mappingNodeID"]=mappingID;
+            temp["mappingNodeName"]=model->getMappingNode(mappingID).name;
             j["core" + std::to_string(i)].push_back(temp);
         }
     }
