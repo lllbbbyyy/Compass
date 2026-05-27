@@ -37,7 +37,7 @@ NOW_DIR = Path(__file__).resolve().parent
 
 # --- 1.1 Parse working directory (sys.argv[1]) ---
 # Default path
-base_dir_str = "exp_diff_1/Carch_Cmapping_decode_hybrid_edmc_rl_gov_2048_70B/"
+base_dir_str = "exp_diff_1/Carch_Cmapping_decode_hybrid_edmc_rl_gov_2048_gpt3_merged/"
 if len(sys.argv) >= 2:
     base_dir_str = sys.argv[1]
 
@@ -119,8 +119,7 @@ SEARCH_SPACE = {
     'SYS_PARAMS': {
         'dram_bw': [16,32,64,128,256], # DRAM bandwidth
         'nop_bw': [32,64,128,256,512],       # NoC network bandwidth
-        'micro_batch': micro_batch_options,
-        'tensor_parall':[4,8,16,32,64]
+        'micro_batch': micro_batch_options
     }
 }
 
@@ -211,7 +210,6 @@ def parse_tensor_to_config(x_tensor):
         "nop_bw": real_sys_vals['nop_bw'],
         "dram_bw": real_sys_vals['dram_bw'],
         "micro_batch": real_sys_vals['micro_batch'],
-        "tensor_parall": real_sys_vals['tensor_parall'],
         "chiplets": chiplets
     }
     return config

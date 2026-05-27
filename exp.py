@@ -20,7 +20,7 @@ config_template={
     "batch_size":66,
 
     "model_info": {
-        "type": "gpt3",
+        "type": "gpt3_merged",
         "n_layer": 1,
         "d_model": 4096,
         "n_head": 32,
@@ -73,7 +73,7 @@ workload_req_info={
 
 scale_model_info={
     64:{
-        "type":"gpt3",
+        "type":"gpt3_merged",
         "n_layer":1,
         "d_model":4096,
         "n_head":32,
@@ -83,7 +83,7 @@ scale_model_info={
         "d_ffn_tiling_size":2048
     },
     512:{
-        "type":"gpt3",
+        "type":"gpt3_merged",
         "n_layer":1,
         "d_model":5120,
         "n_head":40,
@@ -93,12 +93,11 @@ scale_model_info={
         "d_ffn_tiling_size":2560
     },
     2048:{
-        "type":"llama3",
+        "type":"gpt3_merged",
         "n_layer":1,
         "d_model":8192,
         "n_head":64,
         "d_head":128,
-        "n_kv_head":8,
         "d_ffn":28672,
         "d_model_tiling_size":1024,
         "d_ffn_tiling_size":3584
@@ -117,7 +116,7 @@ for s in scale:
             config['model_info']=scale_model_info[s]
             
             # Save the configuration to a JSON file
-            dir = f"./exp_compare/Carch_Cmapping_{w}_{d}_{s}TOPS/"
+            dir = f"./exp_compare/Carch_Cmapping_gpt3_merged_{w}_{d}_{s}TOPS/"
             print(f"Running experiment with config: {dir}")
             os.makedirs(dir, exist_ok=True)
             filename = f"compass_config_search.json"

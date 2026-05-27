@@ -42,7 +42,7 @@ def send_request(host, port, params):
 
 if __name__ == "__main__":
     # Test data
-    m, k, n = 5120, 4096, 4096
+    m, k, n = 128,128,128
     archs = ["ws", "os"]
     raw_results = []
 
