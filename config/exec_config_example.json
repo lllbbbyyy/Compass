@@ -10,6 +10,7 @@
     "batch_size": 4,
     "model_info": {
         "type": "gpt3",
+        "mapping_merge_mode": "none",
         "n_layer": 1,
         "d_model": 4096,
         "n_head": 32,
@@ -25,6 +26,7 @@
     "GA_population_size": 120,
     "GA_generations": 200,
     "exec_load_path": "./best_mapping.json",
+    "detail_stats_mode": "layer",
     "detail_latency_save_path": "./exec_latency_detail.json",
     "detail_energy_save_path": "./exec_energy_detail.json",
     "detail_mc_save_path": "./exec_mc_detail.json"

@@ -68,8 +68,8 @@ cd try
 Copy the example configuration files for Compass and hardware:
 
 ```
-cp ../config/search_config_example.json ./
-cp ../config/exec_config_example.json ./
+cp ../config/search_config_example_gpt_merged.json ./
+cp ../config/exec_config_example_gpt_merged.json ./
 cp ../config/hardware_ws.json ./
 ```
 

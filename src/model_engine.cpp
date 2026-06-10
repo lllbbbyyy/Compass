@@ -5,6 +5,27 @@
 #include <cmath>
 #include <map>
 #include <set>
+#include <stdexcept>
+
+namespace {
+std::string normalize_detail_stats_mode(const std::string& stats_mode)
+{
+    if(stats_mode.empty() || stats_mode == "layer" || stats_mode == "exec_layer" || stats_mode == "original"){
+        return "layer";
+    }
+    if(stats_mode == "mapping_node" || stats_mode == "mapping-node" || stats_mode == "mapping"){
+        return "mapping_node";
+    }
+    throw std::logic_error("Unsupported detail stats mode: " + stats_mode);
+}
+
+void fill_mapping_node_as_layer_metadata(nlohmann::json& item, const std::shared_ptr<Network>& model, Network::mapping_id_t mappingID)
+{
+    const auto& mapping_node = model->getMappingNode(mappingID);
+    item["layerID"] = mappingID;
+    item["layerName"] = mapping_node.name;
+}
+}
 
 cycle_t CompassModelEngine::calcLatency(){
     auto [allLatency,_]=calcLatencyAndEnergy();
@@ -309,59 +330,115 @@ void CompassModelEngine::setSegmentation(const std::vector<int>& _segmentation, 
     setLayerToChip(_layerToChip);
 }
 
-nlohmann::json CompassModelEngine::get_latency_detail()
+nlohmann::json CompassModelEngine::get_latency_detail(const std::string& stats_mode)
 {
+    const std::string mode = normalize_detail_stats_mode(stats_mode);
     nlohmann::json j;
     for (size_t i = 0; i < latencyDetail.size(); i++)
     {
         // cout<<"	core "<<i<<": "<<endl;
         j["core" + std::to_string(i)] = nlohmann::json::array();
+        std::map<std::pair<int, Network::mapping_id_t>, size_t> mapping_item_index;
         for (auto &detail : latencyDetail[i])
         {
             // cout<<"		"<<detail;
-            nlohmann::json temp;
-            temp["layerID"] = detail.layerID;
-            temp["batchID"] = detail.batchID;
-            temp["latencyBegin"] = detail.latencyBegin;
-            temp["latencyEnd"] = detail.latencyEnd;
-            temp["calcTime"]=detail.calcTime;
-            temp["nocTime"]=detail.nocTime;
-            temp["dramTime"]=detail.dramTime;
             auto& model = batchedModels[detail.batchID];
             auto mappingID = model->mapping_id_for_exec(detail.layerID);
-            temp["layerName"]=model->getNode(detail.layerID).name();
-            temp["mappingNodeID"]=mappingID;
-            temp["mappingNodeName"]=model->getMappingNode(mappingID).name;
-            j["core" + std::to_string(i)].push_back(temp);
+            if(mode == "layer"){
+                nlohmann::json temp;
+                temp["layerID"] = detail.layerID;
+                temp["batchID"] = detail.batchID;
+                temp["latencyBegin"] = detail.latencyBegin;
+                temp["latencyEnd"] = detail.latencyEnd;
+                temp["calcTime"]=detail.calcTime;
+                temp["nocTime"]=detail.nocTime;
+                temp["dramTime"]=detail.dramTime;
+                temp["layerName"]=model->getNode(detail.layerID).name();
+                temp["mappingNodeID"]=mappingID;
+                temp["mappingNodeName"]=model->getMappingNode(mappingID).name;
+                j["core" + std::to_string(i)].push_back(temp);
+            }
+            else{
+                auto key = std::make_pair(detail.batchID, mappingID);
+                auto& core_items = j["core" + std::to_string(i)];
+                if(!mapping_item_index.count(key)){
+                    nlohmann::json temp;
+                    temp["batchID"] = detail.batchID;
+                    fill_mapping_node_as_layer_metadata(temp, model, mappingID);
+                    temp["latencyBegin"] = detail.latencyBegin;
+                    temp["latencyEnd"] = detail.latencyEnd;
+                    temp["calcTime"] = 0;
+                    temp["nocTime"] = 0;
+                    temp["dramTime"] = 0;
+                    mapping_item_index[key] = core_items.size();
+                    core_items.push_back(temp);
+                }
+                auto& temp = core_items[mapping_item_index[key]];
+                if(detail.latencyBegin < temp["latencyBegin"].get<cycle_t>()){
+                    temp["latencyBegin"] = detail.latencyBegin;
+                }
+                if(detail.latencyEnd > temp["latencyEnd"].get<cycle_t>()){
+                    temp["latencyEnd"] = detail.latencyEnd;
+                }
+                temp["calcTime"] = temp["calcTime"].get<cycle_t>() + detail.calcTime;
+                temp["nocTime"] = temp["nocTime"].get<cycle_t>() + detail.nocTime;
+                temp["dramTime"] = temp["dramTime"].get<cycle_t>() + detail.dramTime;
+            }
         }
     }
     return j;
 }
 
-nlohmann::json CompassModelEngine::get_energy_detail()
+nlohmann::json CompassModelEngine::get_energy_detail(const std::string& stats_mode)
 {
+    const std::string mode = normalize_detail_stats_mode(stats_mode);
     nlohmann::json j;
     for (size_t i = 0; i < energyDetail.size(); i++)
     {
         // cout<<"	core "<<i<<": "<<endl;
         j["core" + std::to_string(i)] = nlohmann::json::array();
+        std::map<std::pair<int, Network::mapping_id_t>, size_t> mapping_item_index;
         for (auto &detail : energyDetail[i])
         {
             // cout<<"		"<<detail;
-            nlohmann::json temp;
-            temp["layerID"] = detail.layerID;
-            temp["batchID"] = detail.batchID;
-            temp["energy"] = detail.energy;
-            temp["calcEnergy"]=detail.calcEnergy;
-            temp["ubufEnergy"]=detail.ubufEnergy;
-            temp["nocEnergy"]=detail.nocEnergy;
-            temp["dramEnergy"]=detail.dramEnergy;
             auto& model = batchedModels[detail.batchID];
             auto mappingID = model->mapping_id_for_exec(detail.layerID);
-            temp["layerName"]=model->getNode(detail.layerID).name();
-            temp["mappingNodeID"]=mappingID;
-            temp["mappingNodeName"]=model->getMappingNode(mappingID).name;
-            j["core" + std::to_string(i)].push_back(temp);
+            if(mode == "layer"){
+                nlohmann::json temp;
+                temp["layerID"] = detail.layerID;
+                temp["batchID"] = detail.batchID;
+                temp["energy"] = detail.energy;
+                temp["calcEnergy"]=detail.calcEnergy;
+                temp["ubufEnergy"]=detail.ubufEnergy;
+                temp["nocEnergy"]=detail.nocEnergy;
+                temp["dramEnergy"]=detail.dramEnergy;
+                temp["layerName"]=model->getNode(detail.layerID).name();
+                temp["mappingNodeID"]=mappingID;
+                temp["mappingNodeName"]=model->getMappingNode(mappingID).name;
+                j["core" + std::to_string(i)].push_back(temp);
+            }
+            else{
+                auto key = std::make_pair(detail.batchID, mappingID);
+                auto& core_items = j["core" + std::to_string(i)];
+                if(!mapping_item_index.count(key)){
+                    nlohmann::json temp;
+                    temp["batchID"] = detail.batchID;
+                    fill_mapping_node_as_layer_metadata(temp, model, mappingID);
+                    temp["energy"] = 0.0;
+                    temp["calcEnergy"] = 0.0;
+                    temp["ubufEnergy"] = 0.0;
+                    temp["nocEnergy"] = 0.0;
+                    temp["dramEnergy"] = 0.0;
+                    mapping_item_index[key] = core_items.size();
+                    core_items.push_back(temp);
+                }
+                auto& temp = core_items[mapping_item_index[key]];
+                temp["energy"] = temp["energy"].get<energy_t>() + detail.energy;
+                temp["calcEnergy"] = temp["calcEnergy"].get<energy_t>() + detail.calcEnergy;
+                temp["ubufEnergy"] = temp["ubufEnergy"].get<energy_t>() + detail.ubufEnergy;
+                temp["nocEnergy"] = temp["nocEnergy"].get<energy_t>() + detail.nocEnergy;
+                temp["dramEnergy"] = temp["dramEnergy"].get<energy_t>() + detail.dramEnergy;
+            }
         }
     }
     return j;

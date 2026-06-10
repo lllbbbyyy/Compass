@@ -7,6 +7,7 @@
 #include "core_mapping.h"
 #include "assert.h"
 #include "json.hpp"
+#include <string>
 #include <vector>
 
 
@@ -159,9 +160,9 @@ public:
 
     void setSegmentation(const std::vector<int>& _segmentation, const std::vector<std::vector<cidx_t>>& _layerToChip);
 
-    nlohmann::json get_latency_detail();
+    nlohmann::json get_latency_detail(const std::string& stats_mode="layer");
 
-    nlohmann::json get_energy_detail();
+    nlohmann::json get_energy_detail(const std::string& stats_mode="layer");
 
     nlohmann::json get_mc_detail();
 };

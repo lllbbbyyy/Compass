@@ -78,6 +78,7 @@ if len(sys.argv) >= 3:
 
 per_chip_macs=[1024,4096,16384]
 per_chip_buffer=[2048,8192,32768]
+MAC_UNITS_PER_TOPS = 512
 
 # chip_type_list=["tpu","ascend","tesla"]
 # macs_list=[
@@ -101,7 +102,15 @@ if len(sys.argv) >= 4:
     elif scale_val == 2048:
         shape_list=[(32,32), (16, 16), (8, 8)]
     else:
-        assert False, f"Unsupported scale value: {scale_val}. Supported values are 32, 256, 1024."
+        assert False, f"Unsupported scale value: {scale_val}. Supported values are 64, 512, 2048."
+    target_total_macs = scale_val * MAC_UNITS_PER_TOPS
+    for idx, (height, width) in enumerate(shape_list):
+        total_macs = height * width * per_chip_macs[idx]
+        assert total_macs == target_total_macs, (
+            f"Shape {height}x{width} with {per_chip_macs[idx]} MACs/chiplet "
+            f"has {total_macs} total MACs, expected {target_total_macs} "
+            f"for {scale_val} TOPS."
+        )
 
 
 # Simulator global cache and counter

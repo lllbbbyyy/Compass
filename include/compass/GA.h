@@ -100,9 +100,9 @@ public:
 
     std::tuple<cycle_t, energy_t, double, mc_t> get_best_res();
 
-    void save_latency_detail(const std::string &filename);
+    void save_latency_detail(const std::string &filename, const std::string& stats_mode="layer");
 
-    void save_energy_detail(const std::string &filename);
+    void save_energy_detail(const std::string &filename, const std::string& stats_mode="layer");
 
     void save_mc_detail(const std::string &filename);
 

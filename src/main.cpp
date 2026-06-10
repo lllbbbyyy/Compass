@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <unistd.h>
 #include <limits.h>
+#include <stdexcept>
 #include "layer_engine.h"
 #include "core.h"
 #include "nns/nns.h"
@@ -21,24 +22,79 @@
 using namespace std;
 using json = nlohmann::json;
 
+static len_t get_motivation_gemm_dim(const json& model_info, const string& layer_name, const string& dim_name)
+{
+	if(!model_info.contains(layer_name)){
+		throw std::logic_error("motivation_two_layer model_info missing " + layer_name);
+	}
+	const auto& layer_info = model_info[layer_name];
+	if(!layer_info.contains(dim_name)){
+		throw std::logic_error("motivation_two_layer " + layer_name + " missing " + dim_name);
+	}
+	return layer_info[dim_name].get<len_t>();
+}
+
+static len_t get_motivation_layer_dim_or(const json& model_info, const string& layer_name, const string& dim_name, len_t default_value)
+{
+	if(!model_info.contains(layer_name)){
+		return default_value;
+	}
+	const auto& layer_info = model_info[layer_name];
+	if(!layer_info.contains(dim_name)){
+		return default_value;
+	}
+	return layer_info[dim_name].get<len_t>();
+}
+
 std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
+	string type= j["type"];
+	if(type=="motivation_two_layer"){
+		(void)reqs;
+		return create_motivation_two_layer(
+			get_motivation_gemm_dim(j, "layer_a", "M"),
+			get_motivation_gemm_dim(j, "layer_a", "K"),
+			get_motivation_gemm_dim(j, "layer_a", "N"),
+			get_motivation_gemm_dim(j, "layer_b", "M"),
+			get_motivation_gemm_dim(j, "layer_b", "K"),
+			get_motivation_gemm_dim(j, "layer_b", "N"),
+			get_motivation_layer_dim_or(j, "layer_b", "heads", 1));
+	}
 	len_t n_layers = j["n_layer"];
 	len_t d_model = j["d_model"];
 	len_t n_head = j["n_head"];
 	len_t d_head = j["d_head"];
 	len_t d_ffn = j["d_ffn"];
-	len_t d_model_tiling_size= j["d_model_tiling_size"];
-	len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
-	string type= j["type"];
+	string mapping_merge_mode;
+	if(j.contains("mapping_merge_mode")){
+		mapping_merge_mode = j["mapping_merge_mode"].get<string>();
+	}
+	else if(j.contains("merge_granularity")){
+		mapping_merge_mode = j["merge_granularity"].get<string>();
+	}
+	else if(type=="gpt3_merged" || type=="llama3_merged"){
+		mapping_merge_mode = "stage";
+	}
+	else{
+		mapping_merge_mode = "none";
+	}
+	DEBUG("mapping_merge_mode", mapping_merge_mode);
 	if (type=="llama3"){
+		len_t d_model_tiling_size= j["d_model_tiling_size"];
+		len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
 		len_t n_kv_heads = j["n_kv_head"];
-		return create_llama3(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
+		return create_llama3(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, d_model_tiling_size, d_ffn_tiling_size, mapping_merge_mode);
 	}
 	else if(type=="gpt3"){
-		return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
+		len_t d_model_tiling_size= j["d_model_tiling_size"];
+		len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
+		return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size, mapping_merge_mode);
 	}
 	else if(type=="gpt3_merged"){
-		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size);
+		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, mapping_merge_mode);
+	}
+	else if(type=="llama3_merged"){
+		len_t n_kv_heads = j["n_kv_head"];
+		return create_llama3_merged(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, mapping_merge_mode);
 	}
 	return nullptr;
 }
@@ -99,7 +155,9 @@ int main(int argc, char *argv[])
 	else if(j.contains("micro_batch")){
 		micro_batch_size = j["micro_batch"];
 	}
-	if(j.contains("tensor_parall")){
+	string config_model_type = config_j["model_info"]["type"];
+	bool is_merged_model = config_model_type=="gpt3_merged" || config_model_type=="llama3_merged";
+	if(j.contains("tensor_parall") && !is_merged_model){
 		int tensor_parall=j["tensor_parall"];
 		int d_model=config_j["model_info"]["d_model"];
 		int d_ffn=config_j["model_info"]["d_ffn"];
@@ -201,7 +259,7 @@ int main(int argc, char *argv[])
 			
 			// auto n =gen_convs(36);
 			// auto n=create_GPT3(batches[i],1,256,8,32);
-			if(model_type=="gpt3"||model_type=="gpt3_merged"||model_type=="llama3"){
+			if(model_type=="gpt3"||model_type=="gpt3_merged"||model_type=="llama3"||model_type=="llama3_merged"||model_type=="motivation_two_layer"){
 				n = create_llm(model_info, batches[i]);
 			}
 			else{
@@ -234,6 +292,14 @@ int main(int argc, char *argv[])
 	string detail_latency_file=config_j["detail_latency_save_path"];
 	string detail_energy_file=config_j["detail_energy_save_path"];
 	string detail_mc_file=config_j["detail_mc_save_path"];
+	string detail_stats_mode = "layer";
+	if(config_j.contains("detail_stats_mode")){
+		detail_stats_mode = config_j["detail_stats_mode"].get<string>();
+	}
+	else if(config_j.contains("detail_stat_mode")){
+		detail_stats_mode = config_j["detail_stat_mode"].get<string>();
+	}
+	DEBUG("detail_stats_mode", detail_stats_mode);
 	string search_process_file=config_j["search_process_save_path"];
 	string exec_load_file=config_j["exec_load_path"];
 
@@ -252,9 +318,9 @@ int main(int argc, char *argv[])
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
-			ga_engine.save_latency_detail(detail_latency_file);
+			ga_engine.save_latency_detail(detail_latency_file, detail_stats_mode);
 		if(!detail_energy_file.empty())
-			ga_engine.save_energy_detail(detail_energy_file);
+			ga_engine.save_energy_detail(detail_energy_file, detail_stats_mode);
 		if(!detail_mc_file.empty())
 			ga_engine.save_mc_detail(detail_mc_file);
 		if(!search_process_file.empty())
@@ -271,9 +337,9 @@ int main(int argc, char *argv[])
 		if(!best_solution_file.empty())
 			ga_engine.save_best_solution(best_solution_file, micro_batch_size);
 		if(!detail_latency_file.empty())
-			ga_engine.save_latency_detail(detail_latency_file);
+			ga_engine.save_latency_detail(detail_latency_file, detail_stats_mode);
 		if(!detail_energy_file.empty())
-			ga_engine.save_energy_detail(detail_energy_file);
+			ga_engine.save_energy_detail(detail_energy_file, detail_stats_mode);
 		if(!detail_mc_file.empty())
 			ga_engine.save_mc_detail(detail_mc_file);
 		if(!search_process_file.empty())
@@ -347,13 +413,13 @@ int main(int argc, char *argv[])
 		DEBUG("exec avg res",latency, energy, edp_res, mc);
 		model_engine.calcLatencyAndEnergy(); //for detail
 		if(!detail_latency_file.empty()){
-			auto j=model_engine.get_latency_detail();
+			auto j=model_engine.get_latency_detail(detail_stats_mode);
 			std::ofstream o(detail_latency_file);
 			o << std::setw(4) << j << std::endl;
 			std::cout << "Best mapping latency detail saved to " << detail_latency_file << "\n";
 		}
 		if(!detail_energy_file.empty()){
-			auto j=model_engine.get_energy_detail();
+			auto j=model_engine.get_energy_detail(detail_stats_mode);
 			std::ofstream o(detail_energy_file);
 			o << std::setw(4) << j << std::endl;
 			std::cout << "Best mapping energy detail saved to " << detail_energy_file << "\n";

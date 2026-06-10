@@ -10,13 +10,12 @@
     "batch_size": 4,
     "model_info": {
         "type": "gpt3_merged",
+        "mapping_merge_mode": "stage",
         "n_layer": 1,
         "d_model": 4096,
         "n_head": 32,
         "d_head": 128,
-        "d_ffn": 16384,
-        "d_model_tiling_size": 512,
-        "d_ffn_tiling_size": 2048
+        "d_ffn": 16384
     },
     "dram_num": 4,
     "run_mode": "GA",
@@ -25,6 +24,7 @@
     "GA_population_size": 120,
     "GA_generations": 200,
     "exec_load_path": "",
+    "detail_stats_mode": "mapping_node",
     "detail_latency_save_path": "",
     "detail_energy_save_path": "",
     "detail_mc_save_path": ""

@@ -15,19 +15,18 @@ config_template={
     "is_chunked_prefill": False,
 
     "req_number":3,
-    "req_prefill_number":2,
-    "req_decode_number":64,
-    "batch_size":66,
+    "req_prefill_number":1,
+    "req_decode_number":127,
+    "batch_size":128,
 
     "model_info": {
         "type": "gpt3_merged",
+        "mapping_merge_mode": "stage",
         "n_layer": 1,
         "d_model": 4096,
         "n_head": 32,
         "d_head": 128,
-        "d_ffn": 16384,
-        "d_model_tiling_size": 512,
-        "d_ffn_tiling_size": 2048
+        "d_ffn": 16384
     },
 
     "dram_num":4,
@@ -41,6 +40,7 @@ config_template={
     "GA_generations":100,
 
     "exec_load_path":"./best_mapping.json",
+    "detail_stats_mode":"mapping_node",
     "detail_latency_save_path":"",
     "detail_energy_save_path":"",
     "detail_mc_save_path":""
@@ -65,42 +65,40 @@ workload_req_info={
     },
     'mixed':{
         'req_number':4,
-        "req_prefill_number":2,
-        "req_decode_number":64,
-        "batch_size":66
+        "req_prefill_number":1,
+        "req_decode_number":127,
+        "batch_size":128
     }
 }
 
 scale_model_info={
     64:{
         "type":"gpt3_merged",
+        "mapping_merge_mode":"stage",
         "n_layer":1,
         "d_model":4096,
         "n_head":32,
         "d_head":128,
-        "d_ffn":16384,
-        "d_model_tiling_size":512,
-        "d_ffn_tiling_size":2048
+        "d_ffn":16384
     },
     512:{
         "type":"gpt3_merged",
+        "mapping_merge_mode":"stage",
         "n_layer":1,
         "d_model":5120,
         "n_head":40,
         "d_head":128,
-        "d_ffn":20480,
-        "d_model_tiling_size":640,
-        "d_ffn_tiling_size":2560
+        "d_ffn":20480
     },
     2048:{
-        "type":"gpt3_merged",
+        "type":"llama3_merged",
+        "mapping_merge_mode":"stage",
         "n_layer":1,
         "d_model":8192,
         "n_head":64,
         "d_head":128,
-        "d_ffn":28672,
-        "d_model_tiling_size":1024,
-        "d_ffn_tiling_size":3584
+        "n_kv_head":8,
+        "d_ffn":28672
     }
 }
 
@@ -116,7 +114,8 @@ for s in scale:
             config['model_info']=scale_model_info[s]
             
             # Save the configuration to a JSON file
-            dir = f"./exp_compare/Carch_Cmapping_gpt3_merged_{w}_{d}_{s}TOPS/"
+            model_type = scale_model_info[s]["type"]
+            dir = f"./exp_compare/Carch_Cmapping_{model_type}_{w}_{d}_{s}TOPS/"
             print(f"Running experiment with config: {dir}")
             os.makedirs(dir, exist_ok=True)
             filename = f"compass_config_search.json"

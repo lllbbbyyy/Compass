@@ -516,23 +516,23 @@ void GA::save_best_solution(const std::string &filename,int micro_batch_size)
     std::cout << "Latency: " << best_solution.latency << ", Energy: " << best_solution.energy << ", EDP: " << 1/best_fitness << "\n";
 }
 
-void GA::save_latency_detail(const std::string &filename)
+void GA::save_latency_detail(const std::string &filename, const std::string& stats_mode)
 {
     nlohmann::json j;
     engines.back()[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
     engines.back()[0]->calcLatencyAndEnergy();
-    j=engines.back()[0]->get_latency_detail();
+    j=engines.back()[0]->get_latency_detail(stats_mode);
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution latency detail saved to " << filename << "\n";
 }
 
-void GA::save_energy_detail(const std::string &filename)
+void GA::save_energy_detail(const std::string &filename, const std::string& stats_mode)
 {
     nlohmann::json j;
     engines.back()[0]->setSegmentation(best_solution.segmentation, best_solution.layerToChip);
     engines.back()[0]->calcLatencyAndEnergy();
-    j=engines.back()[0]->get_energy_detail();
+    j=engines.back()[0]->get_energy_detail(stats_mode);
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     std::cout << "Best solution energy detail saved to " << filename << "\n";

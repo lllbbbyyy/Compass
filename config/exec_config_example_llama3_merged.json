@@ -9,13 +9,14 @@
     "req_decode_number": 0,
     "batch_size": 4,
     "model_info": {
-        "type": "gpt3_merged",
+        "type": "llama3_merged",
         "mapping_merge_mode": "stage",
         "n_layer": 1,
-        "d_model": 4096,
-        "n_head": 32,
+        "d_model": 8192,
+        "n_head": 64,
         "d_head": 128,
-        "d_ffn": 16384
+        "n_kv_head": 8,
+        "d_ffn": 28672
     },
     "dram_num": 4,
     "run_mode": "exec",
