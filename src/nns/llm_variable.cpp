@@ -37,6 +37,47 @@ bool merge_post_processing(const std::string& mapping_merge_mode)
 	return mapping_merge_mode == "stage_post";
 }
 
+Network::mapping_id_t create_tensor_parallel_stage_mapping(
+	const std::shared_ptr<Network>& n,
+	const std::string& mapping_merge_mode,
+	bool free_tensor_parallel_mapping,
+	const std::string& stage_name,
+	const std::string& post_name
+)
+{
+	if(!merge_stages(mapping_merge_mode)){
+		return NO_MAPPING_NODE;
+	}
+	if(!free_tensor_parallel_mapping){
+		return n->createMappingNode(
+			merge_post_processing(mapping_merge_mode) ? post_name : stage_name
+		);
+	}
+	return NO_MAPPING_NODE;
+}
+
+Network::mapping_id_t tensor_parallel_tile_mapping(
+	Network::mapping_id_t stage_mapping,
+	bool free_tensor_parallel_mapping
+)
+{
+	return free_tensor_parallel_mapping ? NO_MAPPING_NODE : stage_mapping;
+}
+
+Network::mapping_id_t create_tensor_parallel_post_mapping_if_needed(
+	const std::shared_ptr<Network>& n,
+	const std::string& mapping_merge_mode,
+	bool free_tensor_parallel_mapping,
+	Network::mapping_id_t stage_mapping,
+	const std::string& post_name
+)
+{
+	if(free_tensor_parallel_mapping && merge_post_processing(mapping_merge_mode)){
+		return n->createMappingNode(post_name);
+	}
+	return stage_mapping;
+}
+
 Network::mapping_id_t create_mapping_if_needed(
 	const std::shared_ptr<Network>& n,
 	const std::string& mapping_merge_mode,
@@ -219,6 +260,8 @@ std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n
 	}
 	assert(d_model % d_model_tiling_size == 0);
 	assert(d_ff % d_ff_tiling_size == 0);
+	const bool free_tp_mapping =
+		d_model_tiling_size < d_model || d_ff_tiling_size < d_ff;
 	len_t seq_lens_sum = 0;
 	for(auto& req : reqs){
 		seq_lens_sum += req.lens;
@@ -291,17 +334,22 @@ std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n
 			}
 		}
 
-		auto out_proj_mapping = create_mapping_if_needed(
+		auto out_proj_mapping = create_tensor_parallel_stage_mapping(
 			n,
 			merge_mode,
-			merge_post_processing(merge_mode) ? layer_name+"_Out_Proj_Post" : layer_name+"_Out_Proj"
+			free_tp_mapping,
+			layer_name+"_Out_Proj",
+			layer_name+"_Out_Proj_Post"
 		);
 		Network::layer_set attn_output;
 		for(len_t j=0;j<d_model/d_model_tiling_size;j++)
 		{
 			std::string name = layer_name+"_out_proj_tiling_"+std::to_string(j);
-			attn_output.push_back(add_to_mapping(n, out_proj_mapping, NLAYER(name, Conv, C=d_model, K=d_model_tiling_size, H=seq_lens_sum, W=1), QKVs));
+			attn_output.push_back(add_to_mapping(n, tensor_parallel_tile_mapping(out_proj_mapping, free_tp_mapping), NLAYER(name, Conv, C=d_model, K=d_model_tiling_size, H=seq_lens_sum, W=1), QKVs));
 		}
+		out_proj_mapping = create_tensor_parallel_post_mapping_if_needed(
+			n, merge_mode, free_tp_mapping, out_proj_mapping, layer_name+"_Out_Proj_Post"
+		);
 		lid_t res1;
 		if(merge_post_processing(merge_mode)){
 			attn_output.push_back(prev_layer);
@@ -319,24 +367,38 @@ std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n
 			norm1 = n->add(NLAYER(layer_name+"_norm1", PTP, K=d_model, H=seq_lens_sum, W=1), {res1});
 		}
 
-		auto ffn1_act_mapping = create_mapping_if_needed(n, merge_mode, layer_name+"_FFN1_Act");
+		auto ffn1_act_mapping = create_tensor_parallel_stage_mapping(
+			n,
+			merge_mode,
+			free_tp_mapping,
+			layer_name+"_FFN1",
+			layer_name+"_FFN1_Act"
+		);
 		Network::layer_set ff1,ff2;
 		for(len_t j=0;j<d_ff/d_ff_tiling_size;j++)
 		{
 			std::string name = layer_name+"_ffn1_tiling"+std::to_string(j);
-			ff1.push_back(add_to_mapping(n, ffn1_act_mapping, NLAYER(name, Conv, C=d_model, K=d_ff_tiling_size, H=seq_lens_sum, W=1), {norm1}));
+			ff1.push_back(add_to_mapping(n, tensor_parallel_tile_mapping(ffn1_act_mapping, free_tp_mapping), NLAYER(name, Conv, C=d_model, K=d_ff_tiling_size, H=seq_lens_sum, W=1), {norm1}));
 		}
+		ffn1_act_mapping = create_tensor_parallel_post_mapping_if_needed(
+			n, merge_mode, free_tp_mapping, ffn1_act_mapping, layer_name+"_FFN1_Act"
+		);
 		lid_t gelu = add_to_mapping(n, ffn1_act_mapping, NLAYER(layer_name+"_GeLU", PTP, K=d_ff, H=seq_lens_sum, W=1), ff1);
-		auto ffn2_mapping = create_mapping_if_needed(
+		auto ffn2_mapping = create_tensor_parallel_stage_mapping(
 			n,
 			merge_mode,
-			merge_post_processing(merge_mode) ? layer_name+"_FFN2_Post" : layer_name+"_FFN2"
+			free_tp_mapping,
+			layer_name+"_FFN2",
+			layer_name+"_FFN2_Post"
 		);
 		for(len_t j=0;j<d_model/d_model_tiling_size;j++)
 		{
 			std::string name = layer_name+"_ffn2_tiling"+std::to_string(j);
-			ff2.push_back(add_to_mapping(n, ffn2_mapping, NLAYER(name, Conv, C=d_ff, K=d_model_tiling_size, H=seq_lens_sum, W=1), {gelu}));
+			ff2.push_back(add_to_mapping(n, tensor_parallel_tile_mapping(ffn2_mapping, free_tp_mapping), NLAYER(name, Conv, C=d_ff, K=d_model_tiling_size, H=seq_lens_sum, W=1), {gelu}));
 		}
+		ffn2_mapping = create_tensor_parallel_post_mapping_if_needed(
+			n, merge_mode, free_tp_mapping, ffn2_mapping, layer_name+"_FFN2_Post"
+		);
 		lid_t res2;
 		if(merge_post_processing(merge_mode)){
 			ff2.push_back(norm1);
@@ -528,6 +590,8 @@ std::shared_ptr<Network> create_llama3_merged(
 	}
 	assert(d_model % d_model_tiling_size == 0);
 	assert(d_ff % d_ff_tiling_size == 0);
+	const bool free_tp_mapping =
+		d_model_tiling_size < d_model || d_ff_tiling_size < d_ff;
 	len_t seq_lens_sum = 0;
 	for(auto& req : reqs){
 		seq_lens_sum += req.lens;
@@ -603,17 +667,22 @@ std::shared_ptr<Network> create_llama3_merged(
 			}
 		}
 
-		auto out_proj_mapping = create_mapping_if_needed(
+		auto out_proj_mapping = create_tensor_parallel_stage_mapping(
 			n,
 			merge_mode,
-			merge_post_processing(merge_mode) ? layer_name+"_Out_Proj_Post" : layer_name+"_Out_Proj"
+			free_tp_mapping,
+			layer_name+"_Out_Proj",
+			layer_name+"_Out_Proj_Post"
 		);
 		Network::layer_set attn_output;
 		for(len_t j=0;j<d_model/d_model_tiling_size;j++)
 		{
 			std::string name = layer_name+"_out_proj_tiling_"+std::to_string(j);
-			attn_output.push_back(add_to_mapping(n, out_proj_mapping, NLAYER(name, Conv, C=d_model, K=d_model_tiling_size, H=seq_lens_sum, W=1), QKVs));
+			attn_output.push_back(add_to_mapping(n, tensor_parallel_tile_mapping(out_proj_mapping, free_tp_mapping), NLAYER(name, Conv, C=d_model, K=d_model_tiling_size, H=seq_lens_sum, W=1), QKVs));
 		}
+		out_proj_mapping = create_tensor_parallel_post_mapping_if_needed(
+			n, merge_mode, free_tp_mapping, out_proj_mapping, layer_name+"_Out_Proj_Post"
+		);
 		lid_t res1;
 		if(merge_post_processing(merge_mode)){
 			attn_output.push_back(prev_layer);
@@ -631,24 +700,38 @@ std::shared_ptr<Network> create_llama3_merged(
 			norm2 = n->add(NLAYER(layer_name+"_norm2", PTP, K=d_model, H=seq_lens_sum, W=1), {res1});
 		}
 
-		auto ffn1_act_mapping = create_mapping_if_needed(n, merge_mode, layer_name+"_FFN1_Act");
+		auto ffn1_act_mapping = create_tensor_parallel_stage_mapping(
+			n,
+			merge_mode,
+			free_tp_mapping,
+			layer_name+"_FFN1",
+			layer_name+"_FFN1_Act"
+		);
 		Network::layer_set ff1,ff2;
 		for(len_t j=0;j<d_ff/d_ff_tiling_size;j++)
 		{
 			std::string name = layer_name+"_ffn1_tiling"+std::to_string(j);
-			ff1.push_back(add_to_mapping(n, ffn1_act_mapping, NLAYER(name, Conv, C=d_model, K=d_ff_tiling_size, H=seq_lens_sum, W=1), {norm2}));
+			ff1.push_back(add_to_mapping(n, tensor_parallel_tile_mapping(ffn1_act_mapping, free_tp_mapping), NLAYER(name, Conv, C=d_model, K=d_ff_tiling_size, H=seq_lens_sum, W=1), {norm2}));
 		}
+		ffn1_act_mapping = create_tensor_parallel_post_mapping_if_needed(
+			n, merge_mode, free_tp_mapping, ffn1_act_mapping, layer_name+"_FFN1_Act"
+		);
 		lid_t swiglu = add_to_mapping(n, ffn1_act_mapping, NLAYER(layer_name+"_SwiGLU", PTP, K=d_ff, H=seq_lens_sum, W=1), ff1);
-		auto ffn2_mapping = create_mapping_if_needed(
+		auto ffn2_mapping = create_tensor_parallel_stage_mapping(
 			n,
 			merge_mode,
-			merge_post_processing(merge_mode) ? layer_name+"_FFN2_Post" : layer_name+"_FFN2"
+			free_tp_mapping,
+			layer_name+"_FFN2",
+			layer_name+"_FFN2_Post"
 		);
 		for(len_t j=0;j<d_model/d_model_tiling_size;j++)
 		{
 			std::string name = layer_name+"_ffn2_tiling"+std::to_string(j);
-			ff2.push_back(add_to_mapping(n, ffn2_mapping, NLAYER(name, Conv, C=d_ff, K=d_model_tiling_size, H=seq_lens_sum, W=1), {swiglu}));
+			ff2.push_back(add_to_mapping(n, tensor_parallel_tile_mapping(ffn2_mapping, free_tp_mapping), NLAYER(name, Conv, C=d_ff, K=d_model_tiling_size, H=seq_lens_sum, W=1), {swiglu}));
 		}
+		ffn2_mapping = create_tensor_parallel_post_mapping_if_needed(
+			n, merge_mode, free_tp_mapping, ffn2_mapping, layer_name+"_FFN2_Post"
+		);
 		lid_t res2;
 		if(merge_post_processing(merge_mode)){
 			ff2.push_back(res1);

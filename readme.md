@@ -54,6 +54,8 @@ This will generate an executable named `compass` in the build directory. The exe
 ./build/compass <search/exec_config.json> <hardware.json> <search/exec_res.csv>
 ```
 
+The hardware JSON may set `tensor_parall` to select the number of output-channel shards for eligible merged-model OutProj and FFN GEMMs. When the value is greater than one, each shard is exposed as an independent mapping node and may be placed on a different chiplet. Residual, normalization, and activation nodes retain the original dependencies and execute after their producer shards.
+
 ---
 
 ## Quick Try
