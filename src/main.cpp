@@ -46,6 +46,46 @@ static len_t get_motivation_layer_dim_or(const json& model_info, const string& l
 	return layer_info[dim_name].get<len_t>();
 }
 
+static void apply_tensor_parallel_to_model_info(json& model_info, len_t tensor_parall)
+{
+	if(tensor_parall <= 0){
+		throw std::logic_error("tensor_parall must be positive.");
+	}
+	len_t d_model = model_info["d_model"].get<len_t>();
+	len_t d_ffn = model_info["d_ffn"].get<len_t>();
+	if(d_model % tensor_parall != 0 || d_ffn % tensor_parall != 0){
+		throw std::logic_error("tensor_parall must divide both d_model and d_ffn.");
+	}
+	model_info["tensor_parall"] = tensor_parall;
+}
+
+static std::pair<len_t, len_t> get_model_tiling_sizes(const json& model_info, len_t d_model, len_t d_ffn)
+{
+	len_t d_model_tiling_size = d_model;
+	len_t d_ffn_tiling_size = d_ffn;
+	if(model_info.contains("tensor_parall")){
+		len_t tensor_parall = model_info["tensor_parall"].get<len_t>();
+		if(tensor_parall <= 0 || d_model % tensor_parall != 0 || d_ffn % tensor_parall != 0){
+			throw std::logic_error("model_info.tensor_parall must divide both d_model and d_ffn.");
+		}
+		d_model_tiling_size = d_model / tensor_parall;
+		d_ffn_tiling_size = d_ffn / tensor_parall;
+	}
+	if(model_info.contains("d_model_tiling_size")){
+		d_model_tiling_size = model_info["d_model_tiling_size"].get<len_t>();
+	}
+	if(model_info.contains("d_ffn_tiling_size")){
+		d_ffn_tiling_size = model_info["d_ffn_tiling_size"].get<len_t>();
+	}
+	if(d_model_tiling_size <= 0 || d_ffn_tiling_size <= 0){
+		throw std::logic_error("Model tiling sizes must be positive.");
+	}
+	if(d_model % d_model_tiling_size != 0 || d_ffn % d_ffn_tiling_size != 0){
+		throw std::logic_error("Model tiling sizes must divide d_model and d_ffn.");
+	}
+	return {d_model_tiling_size, d_ffn_tiling_size};
+}
+
 std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	string type= j["type"];
 	if(type=="motivation_two_layer"){
@@ -64,6 +104,7 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	len_t n_head = j["n_head"];
 	len_t d_head = j["d_head"];
 	len_t d_ffn = j["d_ffn"];
+	auto [d_model_tiling_size, d_ffn_tiling_size] = get_model_tiling_sizes(j, d_model, d_ffn);
 	string mapping_merge_mode;
 	if(j.contains("mapping_merge_mode")){
 		mapping_merge_mode = j["mapping_merge_mode"].get<string>();
@@ -79,22 +120,18 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	}
 	DEBUG("mapping_merge_mode", mapping_merge_mode);
 	if (type=="llama3"){
-		len_t d_model_tiling_size= j["d_model_tiling_size"];
-		len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
 		len_t n_kv_heads = j["n_kv_head"];
 		return create_llama3(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, d_model_tiling_size, d_ffn_tiling_size, mapping_merge_mode);
 	}
 	else if(type=="gpt3"){
-		len_t d_model_tiling_size= j["d_model_tiling_size"];
-		len_t d_ffn_tiling_size= j["d_ffn_tiling_size"];
 		return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size, mapping_merge_mode);
 	}
 	else if(type=="gpt3_merged"){
-		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, mapping_merge_mode);
+		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, mapping_merge_mode, d_model_tiling_size, d_ffn_tiling_size);
 	}
 	else if(type=="llama3_merged"){
 		len_t n_kv_heads = j["n_kv_head"];
-		return create_llama3_merged(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, mapping_merge_mode);
+		return create_llama3_merged(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, mapping_merge_mode, d_model_tiling_size, d_ffn_tiling_size);
 	}
 	return nullptr;
 }
@@ -155,14 +192,9 @@ int main(int argc, char *argv[])
 	else if(j.contains("micro_batch")){
 		micro_batch_size = j["micro_batch"];
 	}
-	string config_model_type = config_j["model_info"]["type"];
-	bool is_merged_model = config_model_type=="gpt3_merged" || config_model_type=="llama3_merged";
-	if(j.contains("tensor_parall") && !is_merged_model){
+	if(j.contains("tensor_parall")){
 		int tensor_parall=j["tensor_parall"];
-		int d_model=config_j["model_info"]["d_model"];
-		int d_ffn=config_j["model_info"]["d_ffn"];
-		config_j["model_info"]["d_model_tiling_size"]=d_model/tensor_parall;
-		config_j["model_info"]["d_ffn_tiling_size"]=d_ffn/tensor_parall;
+		apply_tensor_parallel_to_model_info(config_j["model_info"], tensor_parall);
 		DEBUG("tensor_parall: ", tensor_parall);
 	}
 
@@ -228,7 +260,16 @@ int main(int argc, char *argv[])
 	string model_type = model_info["type"];
 	int chunked_size= 1;
 	if(is_chunked_prefill){
-		chunked_size=generator.getNextInputLength()/req_number;
+		if(config_j.contains("chunked_prefill_size")){
+			chunked_size=config_j["chunked_prefill_size"];
+			if(chunked_size<=0){
+				throw std::logic_error("chunked_prefill_size must be positive");
+			}
+		}
+		else{
+			chunked_size=generator.getNextInputLength()/req_number;
+		}
+		DEBUG("chunked_prefill_size", chunked_size);
 	}
 	for(int j:tqdm(req_number,"ReqGenerator: generate requests and create model"))
 	{

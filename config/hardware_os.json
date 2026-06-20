@@ -2,7 +2,7 @@
     "num_chiplets": 36,
     "nop_bw": 128,
     "dram_bw": 64,
-    "micro_batch": 4,
+    "micro_batch": 1,
     "tensor_parall": 8,
     "chip_x": 6,
     "chip_y": 6,

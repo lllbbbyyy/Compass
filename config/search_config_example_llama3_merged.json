@@ -10,7 +10,7 @@
     "batch_size": 4,
     "model_info": {
         "type": "llama3_merged",
-        "mapping_merge_mode": "stage",
+        "mapping_merge_mode": "stage_post",
         "n_layer": 1,
         "d_model": 8192,
         "n_head": 64,

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 dataset='sharegpt'
-dataset='govreport'
+# dataset='govreport'
 input_file = f'../config/{dataset}_input_token_lens.json'
 output_file = f'../config/{dataset}_output_token_lens.json'
 

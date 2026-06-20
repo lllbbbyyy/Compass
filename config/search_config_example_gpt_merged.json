@@ -10,7 +10,7 @@
     "batch_size": 4,
     "model_info": {
         "type": "gpt3_merged",
-        "mapping_merge_mode": "stage",
+        "mapping_merge_mode": "stage_post",
         "n_layer": 1,
         "d_model": 4096,
         "n_head": 32,
@@ -25,7 +25,7 @@
     "GA_generations": 200,
     "exec_load_path": "",
     "detail_stats_mode": "mapping_node",
-    "detail_latency_save_path": "",
-    "detail_energy_save_path": "",
-    "detail_mc_save_path": ""
+    "detail_latency_save_path": "./search_latency_detail.json",
+    "detail_energy_save_path": "./search_energy_detail.json",
+    "detail_mc_save_path": "./search_mc_detail.json"
 }
