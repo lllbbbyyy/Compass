@@ -144,18 +144,22 @@ void CompassLayerEngine::calcNoC(vol_t Ifmfactor,vol_t Wgtfactor,vol_t Ofmfactor
 	}
 
     auto ofmSize=nowLayer.ofmap_shape().tot_size(batchSize)*Ofmfactor;
-
-    if(layerNode.isTiling){
-        auto nocSize=layerNode.htile*layerNode.ktile*Ofmfactor;
-        noc->unicast_to_dram(corePos, ofmSize-nocSize,layerNode.writeDRAMIndex);
-        if(isWriteDram){
-            noc->unicast_to_dram(corePos, nocSize,layerNode.writeDRAMIndex);
-        }
+    vol_t requiredWriteSize = isWriteDram ? ofmSize : 0;
+    if(layerNode.mustWriteDRAM){
+        const vol_t forcedWriteSize = layerNode.mustWriteDRAMSize == 0
+            ? ofmSize
+            : MIN(ofmSize, layerNode.mustWriteDRAMSize*Ofmfactor);
+        requiredWriteSize = MAX(requiredWriteSize, forcedWriteSize);
     }
-    else{
-        if(isWriteDram){
-            noc->unicast_to_dram(corePos, ofmSize,layerNode.writeDRAMIndex);
-        }
+
+    // Tiled outputs that do not fit in the local buffer are spilled even if
+    // no architectural writeback is requested. Do not count that spill twice.
+    if(layerNode.isTiling){
+        auto nocSize=MIN(ofmSize, layerNode.htile*layerNode.ktile*Ofmfactor);
+        requiredWriteSize = MAX(requiredWriteSize, ofmSize-nocSize);
+    }
+    if(requiredWriteSize > 0){
+        noc->unicast_to_dram(corePos, requiredWriteSize,layerNode.writeDRAMIndex);
     }
 	// Save to remote mem if necessary
     return;
@@ -284,7 +288,7 @@ CompassLayerEngine::LayerCost CompassLayerEngine::calCost(){
         DEBUG("nocTime",nocTime);
         DEBUG("calcTime",cost.time);
     }
-    cost.time = MAX(cost.time, nocTime);
+    cost.time += nocTime;
     cost.noc_time = noc->get_hop_time();
     cost.dram_time = noc->get_DRAM_time();
 

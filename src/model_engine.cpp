@@ -95,7 +95,7 @@ std::pair<cycle_t,energy_t> CompassModelEngine::calcLatencyAndEnergy(){
             {
                 auto chipID=segmentsChips[j][i][k];
                 auto layerID=segmentsLayers[i][k];
-                bool isWriteDram = isWriteDRAM[j][layerID]||model->getNode(layerID).mustWriteDRAM;
+                bool isWriteDram = isWriteDRAM[j][layerID];
                 bool isLoadWeight = false;
                 if(latencyPerChip[chipID]==0||lastLayerPerChip[chipID]!=layerID){
                     isLoadWeight=true;

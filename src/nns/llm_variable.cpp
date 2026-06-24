@@ -1,5 +1,6 @@
 #include "network.h"
 
+#include <algorithm>
 #include <cassert>
 
 #include "util.h"
@@ -102,6 +103,146 @@ lid_t add_to_mapping(
 		return n->add(mapping_id, l, ifmPrevs, width, ifm_input_data, wgtPrevs, wgtInputData);
 	}
 	return n->add(l, ifmPrevs, width, ifm_input_data, wgtPrevs, wgtInputData);
+}
+
+std::string normalize_qkv_projection_mode(const std::string& qkv_projection_mode)
+{
+	if(qkv_projection_mode.empty() || qkv_projection_mode == "separate"){
+		return "separate";
+	}
+	if(qkv_projection_mode == "fused_tp" || qkv_projection_mode == "fused-tp"){
+		return "fused_tp";
+	}
+	throw std::logic_error("Unsupported QKV projection mode: " + qkv_projection_mode);
+}
+
+struct QKVProjectionSources{
+	std::vector<lid_t> q_by_head;
+	std::vector<lid_t> k_by_kv_head;
+	std::vector<lid_t> v_by_kv_head;
+};
+
+std::vector<len_t> balanced_partition_sizes(len_t total, len_t parts)
+{
+	assert(total > 0 && parts > 0 && parts <= total);
+	std::vector<len_t> sizes(parts, total / parts);
+	for(len_t i=0; i<total%parts; ++i){
+		++sizes[i];
+	}
+	return sizes;
+}
+
+QKVProjectionSources add_separate_qkv_projection(
+	const std::shared_ptr<Network>& n,
+	lid_t input,
+	const std::string& layer_name,
+	len_t seq_lens_sum,
+	len_t d_model,
+	len_t n_heads,
+	len_t n_kv_heads,
+	len_t d_head
+)
+{
+	const len_t kv_dim = n_kv_heads*d_head;
+	lid_t K = n->add(NLAYER(layer_name+"_k_gen_merged", Conv, C=d_model, K=kv_dim, H=seq_lens_sum, W=1), {input});
+	n->getNode(K).mustWriteDRAM=true;
+	lid_t V = n->add(NLAYER(layer_name+"_v_gen_merged", Conv, C=d_model, K=kv_dim, H=seq_lens_sum, W=1), {input});
+	n->getNode(V).mustWriteDRAM=true;
+	lid_t Q = n->add(NLAYER(layer_name+"_q_gen_merged", Conv, C=d_model, K=n_heads*d_head, H=seq_lens_sum, W=1), {input});
+
+	return {
+		std::vector<lid_t>(n_heads, Q),
+		std::vector<lid_t>(n_kv_heads, K),
+		std::vector<lid_t>(n_kv_heads, V),
+	};
+}
+
+QKVProjectionSources add_fused_tp_qkv_projection(
+	const std::shared_ptr<Network>& n,
+	lid_t input,
+	const std::string& layer_name,
+	len_t seq_lens_sum,
+	len_t d_model,
+	len_t n_heads,
+	len_t n_kv_heads,
+	len_t d_head,
+	len_t tensor_parallel
+)
+{
+	if(tensor_parallel <= 0){
+		throw std::logic_error("tensor_parallel must be positive for fused QKV projection.");
+	}
+	const len_t q_parts = MIN(n_heads, tensor_parallel);
+	const len_t kv_parts = MIN(n_kv_heads, tensor_parallel);
+	const auto q_partition_sizes = balanced_partition_sizes(n_heads, q_parts);
+	const auto kv_partition_sizes = balanced_partition_sizes(n_kv_heads, kv_parts);
+
+	// q_parts is never smaller than kv_parts for MHA/GQA. Spread KV groups
+	// across Q shards while keeping every Q/K/V head wholly inside one shard.
+	std::vector<int> kv_part_for_q_part(q_parts, -1);
+	for(len_t kv_part=0; kv_part<kv_parts; ++kv_part){
+		const len_t q_part = kv_part*q_parts/kv_parts;
+		kv_part_for_q_part[q_part] = static_cast<int>(kv_part);
+	}
+
+	QKVProjectionSources sources{
+		std::vector<lid_t>(n_heads),
+		std::vector<lid_t>(n_kv_heads),
+		std::vector<lid_t>(n_kv_heads),
+	};
+	len_t q_head_offset = 0;
+	len_t kv_head_offset = 0;
+	for(len_t q_part=0; q_part<q_parts; ++q_part){
+		const len_t q_head_count = q_partition_sizes[q_part];
+		const int kv_part = kv_part_for_q_part[q_part];
+		const len_t kv_head_count = kv_part >= 0 ? kv_partition_sizes[static_cast<size_t>(kv_part)] : 0;
+		const len_t output_dim = (q_head_count + 2*kv_head_count)*d_head;
+		const std::string name = layer_name+"_qkv_gen_fused_tp_shard"+std::to_string(q_part);
+		lid_t shard = n->add(NLAYER(name, Conv, C=d_model, K=output_dim, H=seq_lens_sum, W=1), {input});
+
+		for(len_t head=0; head<q_head_count; ++head){
+			sources.q_by_head[q_head_offset++] = shard;
+		}
+		if(kv_head_count > 0){
+			auto& shard_node = n->getNode(shard);
+			shard_node.mustWriteDRAM = true;
+			shard_node.mustWriteDRAMSize = 2*kv_head_count*d_head*seq_lens_sum;
+			for(len_t head=0; head<kv_head_count; ++head){
+				sources.k_by_kv_head[kv_head_offset] = shard;
+				sources.v_by_kv_head[kv_head_offset] = shard;
+				++kv_head_offset;
+			}
+		}
+	}
+	assert(q_head_offset == n_heads);
+	assert(kv_head_offset == n_kv_heads);
+	return sources;
+}
+
+QKVProjectionSources add_qkv_projection(
+	const std::shared_ptr<Network>& n,
+	lid_t input,
+	const std::string& layer_name,
+	len_t seq_lens_sum,
+	len_t d_model,
+	len_t n_heads,
+	len_t n_kv_heads,
+	len_t d_head,
+	len_t tensor_parallel,
+	const std::string& qkv_projection_mode
+)
+{
+	const std::string mode = normalize_qkv_projection_mode(qkv_projection_mode);
+	if(mode == "fused_tp"){
+		return add_fused_tp_qkv_projection(
+			n, input, layer_name, seq_lens_sum, d_model,
+			n_heads, n_kv_heads, d_head, tensor_parallel
+		);
+	}
+	return add_separate_qkv_projection(
+		n, input, layer_name, seq_lens_sum, d_model,
+		n_heads, n_kv_heads, d_head
+	);
 }
 }
 
@@ -247,7 +388,7 @@ std::shared_ptr<Network> create_GPT3(const std::vector<Req>& reqs,len_t n_layers
 	return n;
 };
 
-std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n_layers,len_t d_model,len_t n_heads,len_t d_head,len_t d_ff,const std::string& mapping_merge_mode,len_t d_model_tiling_size,len_t d_ff_tiling_size)
+std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n_layers,len_t d_model,len_t n_heads,len_t d_head,len_t d_ff,const std::string& mapping_merge_mode,len_t d_model_tiling_size,len_t d_ff_tiling_size,const std::string& qkv_projection_mode,len_t tensor_parallel)
 {
 	const std::string merge_mode = normalize_mapping_merge_mode(mapping_merge_mode);
 	auto n=std::make_shared<Network>();
@@ -257,6 +398,9 @@ std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n
 	}
 	if(d_ff_tiling_size == 0){
 		d_ff_tiling_size = d_ff;
+	}
+	if(tensor_parallel == 0){
+		tensor_parallel = d_model/d_model_tiling_size;
 	}
 	assert(d_model % d_model_tiling_size == 0);
 	assert(d_ff % d_ff_tiling_size == 0);
@@ -274,19 +418,18 @@ std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n
 
 	for(len_t i=0;i<n_layers;i++){
 		std::string layer_name="layer"+std::to_string(i);
-		auto qkv_gen_mapping = create_mapping_if_needed(n, merge_mode, layer_name+"_QKV_Gen");
-
-		lid_t K = add_to_mapping(n, qkv_gen_mapping, NLAYER(layer_name+"_k_gen_merged", Conv, C=d_model, K=d_model, H=seq_lens_sum, W=1), {prev_layer});
-		n->getNode(K).mustWriteDRAM=true;
-		lid_t V = add_to_mapping(n, qkv_gen_mapping, NLAYER(layer_name+"_v_gen_merged", Conv, C=d_model, K=d_model, H=seq_lens_sum, W=1), {prev_layer});
-		n->getNode(V).mustWriteDRAM=true;
-		lid_t Q = add_to_mapping(n, qkv_gen_mapping, NLAYER(layer_name+"_q_gen_merged", Conv, C=d_model, K=d_model, H=seq_lens_sum, W=1), {prev_layer});
+		const auto qkv_sources = add_qkv_projection(
+			n, prev_layer, layer_name, seq_lens_sum, d_model,
+			n_heads, n_heads, d_head, tensor_parallel, qkv_projection_mode
+		);
 
 		auto attn_qk_mapping = create_mapping_if_needed(n, merge_mode, layer_name+"_Attn_QK");
 		Network::layer_set QKElts;
 		for(len_t j=0;j<n_heads;j++)
 		{
 			std::string name = layer_name+"_head"+std::to_string(j);
+			const lid_t Q = qkv_sources.q_by_head[j];
+			const lid_t K = qkv_sources.k_by_kv_head[j];
 
 			for(size_t k=0;k<reqs.size();k++)
 			{
@@ -314,6 +457,7 @@ std::shared_ptr<Network> create_GPT3_merged(const std::vector<Req>& reqs,len_t n
 		for(len_t j=0;j<n_heads;j++)
 		{
 			std::string name = layer_name+"_head"+std::to_string(j);
+			const lid_t V = qkv_sources.v_by_kv_head[j];
 			lid_t QKV;
 
 			for(size_t k=0;k<reqs.size();k++)
@@ -576,7 +720,9 @@ std::shared_ptr<Network> create_llama3_merged(
     len_t d_ff,
     const std::string& mapping_merge_mode,
     len_t d_model_tiling_size,
-    len_t d_ff_tiling_size
+    len_t d_ff_tiling_size,
+    const std::string& qkv_projection_mode,
+    len_t tensor_parallel
 ) {
 	const std::string merge_mode = normalize_mapping_merge_mode(mapping_merge_mode);
 	auto n=std::make_shared<Network>();
@@ -587,6 +733,9 @@ std::shared_ptr<Network> create_llama3_merged(
 	}
 	if(d_ff_tiling_size == 0){
 		d_ff_tiling_size = d_ff;
+	}
+	if(tensor_parallel == 0){
+		tensor_parallel = d_model/d_model_tiling_size;
 	}
 	assert(d_model % d_model_tiling_size == 0);
 	assert(d_ff % d_ff_tiling_size == 0);
@@ -601,25 +750,23 @@ std::shared_ptr<Network> create_llama3_merged(
 	InputData pos_encoding("pos_encoding", fmap_shape(d_model, seq_lens_sum, 1));
 
 	lid_t prev_layer=n->add(NLAYER("input_add", Eltwise, K=d_model, H=seq_lens_sum, W=1, N=2), {},0,{input,pos_encoding});
-	const len_t kv_dim = n_kv_heads * d_head;
-
 	for(len_t i=0;i<n_layers;i++){
 		std::string layer_name="layer"+std::to_string(i);
 
 		lid_t norm1 = n->add(NLAYER(layer_name+"_norm1", PTP, K=d_model, H=seq_lens_sum, W=1), {prev_layer});
 
-		auto qkv_gen_mapping = create_mapping_if_needed(n, merge_mode, layer_name+"_QKV_Gen");
-		lid_t K = add_to_mapping(n, qkv_gen_mapping, NLAYER(layer_name+"_k_gen_merged", Conv, C=d_model, K=kv_dim, H=seq_lens_sum, W=1), {norm1});
-		n->getNode(K).mustWriteDRAM=true;
-		lid_t V = add_to_mapping(n, qkv_gen_mapping, NLAYER(layer_name+"_v_gen_merged", Conv, C=d_model, K=kv_dim, H=seq_lens_sum, W=1), {norm1});
-		n->getNode(V).mustWriteDRAM=true;
-		lid_t Q = add_to_mapping(n, qkv_gen_mapping, NLAYER(layer_name+"_q_gen_merged", Conv, C=d_model, K=d_model, H=seq_lens_sum, W=1), {norm1});
+		const auto qkv_sources = add_qkv_projection(
+			n, norm1, layer_name, seq_lens_sum, d_model,
+			n_heads, n_kv_heads, d_head, tensor_parallel, qkv_projection_mode
+		);
 
 		auto attn_qk_mapping = create_mapping_if_needed(n, merge_mode, layer_name+"_Attn_QK");
 		Network::layer_set QKElts;
 		for(len_t j=0;j<n_heads;j++)
 		{
 			std::string name = layer_name+"_head"+std::to_string(j);
+			const lid_t Q = qkv_sources.q_by_head[j];
+			const lid_t K = qkv_sources.k_by_kv_head[j/(n_heads/n_kv_heads)];
 
 			for(size_t k=0;k<reqs.size();k++)
 			{
@@ -647,6 +794,7 @@ std::shared_ptr<Network> create_llama3_merged(
 		for(len_t j=0;j<n_heads;j++)
 		{
 			std::string name = layer_name+"_head"+std::to_string(j);
+			const lid_t V = qkv_sources.v_by_kv_head[j/(n_heads/n_kv_heads)];
 			lid_t QKV;
 
 			for(size_t k=0;k<reqs.size();k++)

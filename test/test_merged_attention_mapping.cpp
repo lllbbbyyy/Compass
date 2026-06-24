@@ -39,6 +39,51 @@ std::vector<lid_t> collect_single_layer_mappings(
 	return exec_ids;
 }
 
+lid_t find_exec_layer(const std::shared_ptr<Network>& model, const std::string& name)
+{
+	for(lid_t layer_id=0; layer_id<model->len(); ++layer_id){
+		if(model->getNode(layer_id).name() == name){
+			return layer_id;
+		}
+	}
+	assert(false && "Expected execution layer was not found");
+	return -1;
+}
+
+void check_separate_qkv_mapping(const std::shared_ptr<Network>& model)
+{
+	const lid_t q = find_exec_layer(model, "layer0_q_gen_merged");
+	const lid_t k = find_exec_layer(model, "layer0_k_gen_merged");
+	const lid_t v = find_exec_layer(model, "layer0_v_gen_merged");
+	assert(model->mapping_id_for_exec(q) != model->mapping_id_for_exec(k));
+	assert(model->mapping_id_for_exec(q) != model->mapping_id_for_exec(v));
+	assert(model->mapping_id_for_exec(k) != model->mapping_id_for_exec(v));
+	assert(find_mapping(model, "layer0_QKV_Gen") == nullptr);
+}
+
+void check_fused_gqa_tp_mapping(const std::shared_ptr<Network>& model)
+{
+	const auto shards = collect_single_layer_mappings(model, "layer0_qkv_gen_fused_tp_shard");
+	assert(shards.size() == 8);
+	size_t kv_shards = 0;
+	for(lid_t shard : shards){
+		const auto& node = model->getNode(shard);
+		const auto* conv = dynamic_cast<const ConvLayer*>(&node.layer());
+		assert(conv != nullptr);
+		const len_t output_dim = conv->get_workload().K;
+		assert(output_dim == 64 || output_dim == 192);
+		if(output_dim == 192){
+			++kv_shards;
+			assert(node.mustWriteDRAM);
+			assert(node.mustWriteDRAMSize == 2*64*17);
+		}
+		else{
+			assert(!node.mustWriteDRAM);
+		}
+	}
+	assert(kv_shards == 2);
+}
+
 void assert_depends_on_all(
 	const std::shared_ptr<Network>& model,
 	lid_t consumer,
@@ -150,6 +195,11 @@ int main()
 
 	check_attention_mapping(create_GPT3_merged(reqs, 1, 128, 2, 64, 512, "stage"));
 	check_attention_mapping(create_llama3_merged(reqs, 1, 128, 2, 64, 1, 512, "stage"));
+	check_separate_qkv_mapping(create_GPT3_merged(reqs, 1, 128, 2, 64, 512, "stage"));
+	check_separate_qkv_mapping(create_llama3_merged(reqs, 1, 128, 2, 64, 1, 512, "stage"));
+	check_fused_gqa_tp_mapping(
+		create_llama3_merged(reqs, 1, 512, 8, 64, 2, 1024, "stage", 32, 64, "fused_tp", 16)
+	);
 	check_unsplit_stage_post_mapping(create_GPT3_merged(reqs, 1, 128, 2, 64, 512, "stage_post"));
 	check_free_tensor_parallel_mapping(
 		create_GPT3_merged(reqs, 1, 128, 2, 64, 512, "stage_post", 32, 128),

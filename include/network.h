@@ -38,6 +38,10 @@ public:
 	len_t ctile=1,ktile=1,htile=1;
 
 	bool mustWriteDRAM=false;
+	// Number of output elements that must be persisted even when consumers can
+	// read the rest directly. Zero means the complete output when mustWriteDRAM
+	// is set. This is used by fused QKV projections to persist only K/V cache.
+	vol_t mustWriteDRAMSize=0;
 	bool mustReadDRAM=false;
 	int writeDRAMIndex=-1;
 	int readWgtDRAMIndex=-1;

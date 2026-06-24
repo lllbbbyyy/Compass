@@ -56,6 +56,10 @@ This will generate an executable named `compass` in the build directory. The exe
 
 The hardware JSON may set `tensor_parall` to select the number of output-channel shards for eligible merged-model OutProj and FFN GEMMs. When the value is greater than one, each shard is exposed as an independent mapping node and may be placed on a different chiplet. Residual, normalization, and activation nodes retain the original dependencies and execute after their producer shards.
 
+For merged GPT-3 and Llama3 models, `model_info.qkv_projection_mode` controls the QKV representation. `separate` creates three independently mapped Q, K, and V GEMMs. `fused_tp` creates fused projection shards according to `tensor_parall`; shards preserve complete attention heads, and Llama3 limits K/V partitioning to `min(tensor_parall, n_kv_head)`. Only the K/V portion of a fused output is forced into DRAM as KV cache.
+
+Layer latency is modeled as compute latency plus communication latency. The communication term remains the maximum of NoC-link and DRAM-interface latency because those resources operate concurrently within a layer.
+
 ---
 
 ## Quick Try

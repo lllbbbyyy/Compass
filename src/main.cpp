@@ -105,6 +105,11 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 	len_t d_head = j["d_head"];
 	len_t d_ffn = j["d_ffn"];
 	auto [d_model_tiling_size, d_ffn_tiling_size] = get_model_tiling_sizes(j, d_model, d_ffn);
+	len_t tensor_parallel = d_model/d_model_tiling_size;
+	if(j.contains("tensor_parall")){
+		tensor_parallel = j["tensor_parall"].get<len_t>();
+	}
+	const string qkv_projection_mode = j.value("qkv_projection_mode", "separate");
 	string mapping_merge_mode;
 	if(j.contains("mapping_merge_mode")){
 		mapping_merge_mode = j["mapping_merge_mode"].get<string>();
@@ -119,6 +124,7 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 		mapping_merge_mode = "none";
 	}
 	DEBUG("mapping_merge_mode", mapping_merge_mode);
+	DEBUG("qkv_projection_mode", qkv_projection_mode);
 	if (type=="llama3"){
 		len_t n_kv_heads = j["n_kv_head"];
 		return create_llama3(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, d_model_tiling_size, d_ffn_tiling_size, mapping_merge_mode);
@@ -127,11 +133,11 @@ std::shared_ptr<Network> create_llm(const json& j,const std::vector<Req> &reqs){
 		return create_GPT3(reqs, n_layers, d_model, n_head, d_head, d_ffn, d_model_tiling_size, d_ffn_tiling_size, mapping_merge_mode);
 	}
 	else if(type=="gpt3_merged"){
-		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, mapping_merge_mode, d_model_tiling_size, d_ffn_tiling_size);
+		return create_GPT3_merged(reqs, n_layers, d_model, n_head, d_head, d_ffn, mapping_merge_mode, d_model_tiling_size, d_ffn_tiling_size, qkv_projection_mode, tensor_parallel);
 	}
 	else if(type=="llama3_merged"){
 		len_t n_kv_heads = j["n_kv_head"];
-		return create_llama3_merged(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, mapping_merge_mode, d_model_tiling_size, d_ffn_tiling_size);
+		return create_llama3_merged(reqs, n_layers, d_model, n_head, d_head, n_kv_heads, d_ffn, mapping_merge_mode, d_model_tiling_size, d_ffn_tiling_size, qkv_projection_mode, tensor_parallel);
 	}
 	return nullptr;
 }
